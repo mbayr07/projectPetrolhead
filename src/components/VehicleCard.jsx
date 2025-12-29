@@ -6,59 +6,49 @@ import { useNavigate } from 'react-router-dom';
 export default function VehicleCard({ vehicle }) {
   const navigate = useNavigate();
 
-  const safeDate = (d) => (d ? new Date(d) : null);
+  const parseDate = (d) => {
+    if (!d) return null;
+    const x = new Date(d);
+    return Number.isNaN(x.getTime()) ? null : x;
+  };
+
+  const fmt = (dateStr) => {
+    const d = parseDate(dateStr);
+    if (!d) return 'No data';
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  };
 
   const getStatus = () => {
     const now = new Date();
 
-    const motDate = safeDate(vehicle.motExpiry);
-    const insuranceDate = safeDate(vehicle.insuranceExpiry);
-    const taxDate = vehicle.isSorn ? null : safeDate(vehicle.taxExpiry);
+    const daysUntil = (dateStr) => {
+      const d = parseDate(dateStr);
+      if (!d) return null;
+      return Math.floor((d - now) / (1000 * 60 * 60 * 24));
+    };
 
-    const daysDiff = (date) => Math.floor((date - now) / (1000 * 60 * 60 * 24));
+    const motDays = daysUntil(vehicle.motExpiry);
+    const taxDays = vehicle.isSorn ? null : daysUntil(vehicle.taxExpiry);
+    const insDays = vehicle.isUninsured ? null : daysUntil(vehicle.insuranceExpiry);
 
-    const motDays = motDate ? daysDiff(motDate) : 9999;
-    const insuranceDays = insuranceDate ? daysDiff(insuranceDate) : 9999;
-    const taxDays = taxDate ? daysDiff(taxDate) : 9999; // SORN => treated as safe
+    const expired =
+      (motDays !== null && motDays < 0) ||
+      (taxDays !== null && taxDays < 0) ||
+      (insDays !== null && insDays < 0);
 
-    if (motDays < 0 || insuranceDays < 0 || taxDays < 0) {
-      return { status: 'expired', icon: AlertTriangle, color: 'text-red-500' };
-    } else if (motDays < 30 || insuranceDays < 30 || taxDays < 30) {
-      return { status: 'warning', icon: Clock, color: 'text-yellow-500' };
-    }
-    return { status: 'active', icon: CheckCircle, color: 'text-green-500' };
+    const warning =
+      (motDays !== null && motDays >= 0 && motDays < 30) ||
+      (taxDays !== null && taxDays >= 0 && taxDays < 30) ||
+      (insDays !== null && insDays >= 0 && insDays < 30);
+
+    if (expired) return { icon: AlertTriangle, color: 'text-red-500' };
+    if (warning) return { icon: Clock, color: 'text-yellow-500' };
+    return { icon: CheckCircle, color: 'text-green-500' };
   };
 
-  const statusInfo = getStatus();
-  const StatusIcon = statusInfo.icon;
+  const { icon: StatusIcon, color } = getStatus();
 
-  const getHealthPercentage = () => {
-    const now = new Date();
-
-    const motDate = safeDate(vehicle.motExpiry);
-    const insuranceDate = safeDate(vehicle.insuranceExpiry);
-    const taxDate = vehicle.isSorn ? null : safeDate(vehicle.taxExpiry);
-
-    const daysDiff = (date) => Math.max(0, Math.floor((date - now) / (1000 * 60 * 60 * 24)));
-
-    const motDays = motDate ? daysDiff(motDate) : 0;
-    const insuranceDays = insuranceDate ? daysDiff(insuranceDate) : 0;
-
-    // If SORN, don't penalise missing tax; average only MOT+Insurance
-    if (vehicle.isSorn) {
-      const avg = (motDays + insuranceDays) / 2;
-      return Math.min(100, Math.floor((avg / 365) * 100));
-    }
-
-    const taxDays = taxDate ? daysDiff(taxDate) : 0;
-    const avgDays = (motDays + taxDays + insuranceDays) / 3;
-    return Math.min(100, Math.floor((avgDays / 365) * 100));
-  };
-
-  const healthPercentage = getHealthPercentage();
-
-  const fmt = (dateStr) =>
-    new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  const cols = 1 + (vehicle.isSorn ? 0 : 1) + (vehicle.isUninsured ? 0 : 1);
 
   return (
     <motion.div
@@ -76,42 +66,29 @@ export default function VehicleCard({ vehicle }) {
               <Car className="h-6 w-6 text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-bold text-lg">{vehicle.nickname}</h3>
+
                 {vehicle.isSorn && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-500 font-semibold">
                     SORN
+                  </span>
+                )}
+
+                {vehicle.isUninsured && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full border border-red-500/40 bg-red-500/10 text-red-500 font-semibold">
+                    NO INSURANCE
                   </span>
                 )}
               </div>
               <p className="text-sm text-muted-foreground">{vehicle.registrationNumber}</p>
             </div>
           </div>
-          <StatusIcon className={`h-6 w-6 ${statusInfo.color} warning-light`} />
+
+          <StatusIcon className={`h-6 w-6 ${color} warning-light`} />
         </div>
 
-        <div className="space-y-3 mb-4">
-          <div className="text-sm text-muted-foreground">
-            {vehicle.make} {vehicle.model} ({vehicle.year})
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Vehicle Health</span>
-              <span className="font-bold">{healthPercentage}%</span>
-            </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${healthPercentage}%` }}
-                transition={{ duration: 1, ease: 'easeOut' }}
-                className="h-full gauge-gradient"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className={`grid ${vehicle.isSorn ? 'grid-cols-2' : 'grid-cols-3'} gap-2 text-xs`}>
+        <div className={`grid gap-2 text-xs ${cols === 3 ? 'grid-cols-3' : cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <div className="bg-muted/50 rounded-lg p-2 text-center">
             <div className="text-muted-foreground mb-1">MOT</div>
             <div className="font-semibold">{fmt(vehicle.motExpiry)}</div>
@@ -124,10 +101,12 @@ export default function VehicleCard({ vehicle }) {
             </div>
           )}
 
-          <div className="bg-muted/50 rounded-lg p-2 text-center">
-            <div className="text-muted-foreground mb-1">Insurance</div>
-            <div className="font-semibold">{fmt(vehicle.insuranceExpiry)}</div>
-          </div>
+          {!vehicle.isUninsured && (
+            <div className="bg-muted/50 rounded-lg p-2 text-center">
+              <div className="text-muted-foreground mb-1">Insurance</div>
+              <div className="font-semibold">{fmt(vehicle.insuranceExpiry)}</div>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

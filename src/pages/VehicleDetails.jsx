@@ -2,34 +2,14 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Edit,
-  Trash2,
-  Calendar,
-  Gauge,
-  Droplet,
-  Palette,
-  FileText
-} from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Calendar, Gauge, Droplet, Palette, FileText } from 'lucide-react';
 import Layout from '@/components/Layout';
 import VehicleForm from '@/components/VehicleForm';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useToast } from '@/components/ui/use-toast';
@@ -49,82 +29,83 @@ export default function VehicleDetails() {
       <Layout>
         <div className="text-center py-12">
           <h2 className="text-2xl font-bold mb-2">Vehicle not found</h2>
-          <Button onClick={() => navigate('/dashboard')}>
-            Back to Dashboard
-          </Button>
+          <Button onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
         </div>
       </Layout>
     );
   }
 
+  const parseDate = (d) => {
+    if (!d) return null;
+    const x = new Date(d);
+    return Number.isNaN(x.getTime()) ? null : x;
+  };
+
+  const daysUntil = (dateStr) => {
+    const d = parseDate(dateStr);
+    if (!d) return null;
+    const now = new Date();
+    return Math.floor((d - now) / (1000 * 60 * 60 * 24));
+  };
+
+  const formatFull = (dateStr) => {
+    const d = parseDate(dateStr);
+    if (!d) return 'No data held';
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  };
+
+  const expiryItems = [
+    { label: 'MOT', date: vehicle.motExpiry, applicable: true },
+    { label: 'Tax', date: vehicle.taxExpiry, applicable: !vehicle.isSorn },
+    { label: 'Insurance', date: vehicle.insuranceExpiry, applicable: !vehicle.isUninsured },
+    { label: 'Last Service', date: vehicle.serviceDate, applicable: true },
+  ].filter(i => i.applicable);
+
   const handleDelete = () => {
     deleteVehicle(id);
-    toast({
-      title: 'Vehicle Deleted',
-      description: 'Vehicle has been removed from your fleet.',
-    });
+    toast({ title: 'Vehicle Deleted', description: 'Vehicle has been removed from your fleet.' });
     navigate('/dashboard');
   };
-
-  const getDaysUntil = (date) => {
-    const now = new Date();
-    const target = new Date(date);
-    return Math.floor((target - now) / (1000 * 60 * 60 * 24));
-  };
-
-  // ✅ build expiry list, excluding Tax when SORN
-  const expiryItems = [
-    { label: 'MOT', date: vehicle.motExpiry },
-    ...(vehicle.isSorn ? [] : [{ label: 'Tax', date: vehicle.taxExpiry }]),
-    { label: 'Insurance', date: vehicle.insuranceExpiry },
-    { label: 'Last Service', date: vehicle.serviceDate }
-  ].filter(i => !!i.date);
 
   return (
     <Layout>
       <Helmet>
         <title>{vehicle.nickname} - Vehicle Guardian</title>
-        <meta name="description" content={`Detailed information and maintenance history for ${vehicle.nickname} (${vehicle.registrationNumber})`} />
       </Helmet>
 
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/dashboard')}
-          >
+          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
 
           <div className="flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                 {vehicle.nickname}
               </h1>
+
               {vehicle.isSorn && (
                 <span className="text-xs px-2 py-1 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-500 font-semibold">
                   SORN
                 </span>
               )}
+
+              {vehicle.isUninsured && (
+                <span className="text-xs px-2 py-1 rounded-full border border-red-500/40 bg-red-500/10 text-red-500 font-semibold">
+                  NO INSURANCE
+                </span>
+              )}
             </div>
+
             <p className="text-muted-foreground">{vehicle.registrationNumber}</p>
           </div>
 
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setEditDialogOpen(true)}
-            >
+            <Button variant="outline" size="icon" onClick={() => setEditDialogOpen(true)}>
               <Edit className="h-4 w-4" />
             </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setDeleteDialogOpen(true)}
-              className="text-red-500 hover:text-red-600"
-            >
+            <Button variant="outline" size="icon" onClick={() => setDeleteDialogOpen(true)} className="text-red-500 hover:text-red-600">
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
@@ -139,55 +120,18 @@ export default function VehicleDetails() {
             <h2 className="text-xl font-bold mb-4">Vehicle Information</h2>
 
             <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                  <FileText className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Make & Model</div>
-                  <div className="font-semibold">{vehicle.make} {vehicle.model}</div>
-                </div>
-              </div>
+              <InfoRow icon={FileText} label="Make & Model" value={`${vehicle.make} ${vehicle.model}`} />
+              <InfoRow icon={Calendar} label="Year" value={vehicle.year} />
+              <InfoRow icon={Palette} label="Color" value={vehicle.color || 'No data held'} />
+              <InfoRow icon={Droplet} label="Fuel Type" value={vehicle.fuelType || 'No data held'} />
+              <InfoRow icon={Gauge} label="Mileage" value={vehicle.mileage ? `${vehicle.mileage.toLocaleString()} miles` : 'No data held'} />
 
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                  <Calendar className="h-5 w-5" />
+              {!vehicle.isUninsured && vehicle.insurancePolicyNumber && (
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <div className="text-sm text-muted-foreground">Insurance Policy Number</div>
+                  <div className="font-semibold break-all">{vehicle.insurancePolicyNumber}</div>
                 </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Year</div>
-                  <div className="font-semibold">{vehicle.year}</div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                  <Palette className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Color</div>
-                  <div className="font-semibold">{vehicle.color}</div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                  <Droplet className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Fuel Type</div>
-                  <div className="font-semibold">{vehicle.fuelType}</div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                  <Gauge className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Mileage</div>
-                  <div className="font-semibold">{vehicle.mileage?.toLocaleString()} miles</div>
-                </div>
-              </div>
+              )}
             </div>
           </motion.div>
 
@@ -196,56 +140,56 @@ export default function VehicleDetails() {
             animate={{ opacity: 1, x: 0 }}
             className="bg-card border border-border rounded-xl p-6 space-y-4"
           >
-            <h2 className="text-xl font-bold mb-4">Expiry Dates</h2>
-
-            {vehicle.isSorn && (
-              <div className="text-sm text-muted-foreground -mt-2">
-                Tax is not shown because this vehicle is currently SORN.
-              </div>
-            )}
+            <h2 className="text-xl font-bold mb-4">Dates</h2>
 
             <div className="space-y-4">
               {expiryItems.map((item) => {
-                const daysUntil = getDaysUntil(item.date);
-                const isExpired = daysUntil < 0;
-                const isWarning = daysUntil >= 0 && daysUntil < 30;
+                const du = daysUntil(item.date);
+
+                const hasDate = du !== null;
+                const isExpired = hasDate && du < 0;
+                const isWarning = hasDate && du >= 0 && du < 30;
+
+                const boxClass = !hasDate
+                  ? 'bg-muted/30 border-border'
+                  : isExpired
+                  ? 'bg-red-500/10 border-red-500/50'
+                  : isWarning
+                  ? 'bg-yellow-500/10 border-yellow-500/50'
+                  : 'bg-green-500/10 border-green-500/50';
+
+                const rightText = !hasDate ? 'No data' : (isExpired ? 'Expired' : `${du} days`);
+
+                const rightColor = !hasDate
+                  ? 'text-muted-foreground'
+                  : isExpired
+                  ? 'text-red-500'
+                  : isWarning
+                  ? 'text-yellow-500'
+                  : 'text-green-500';
 
                 return (
-                  <div
-                    key={item.label}
-                    className={`p-4 rounded-lg border ${
-                      isExpired
-                        ? 'bg-red-500/10 border-red-500/50'
-                        : isWarning
-                        ? 'bg-yellow-500/10 border-yellow-500/50'
-                        : 'bg-green-500/10 border-green-500/50'
-                    }`}
-                  >
+                  <div key={item.label} className={`p-4 rounded-lg border ${boxClass}`}>
                     <div className="flex justify-between items-start">
                       <div>
                         <div className="font-semibold">{item.label}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {new Date(item.date).toLocaleDateString('en-GB', {
-                            day: '2-digit',
-                            month: 'long',
-                            year: 'numeric'
-                          })}
-                        </div>
+                        <div className="text-sm text-muted-foreground">{formatFull(item.date)}</div>
+                        {!hasDate && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Add the date to enable reminders.
+                          </div>
+                        )}
                       </div>
-                      <div className={`text-sm font-semibold ${
-                        isExpired
-                          ? 'text-red-500'
-                          : isWarning
-                          ? 'text-yellow-500'
-                          : 'text-green-500'
-                      }`}>
-                        {isExpired ? 'Expired' : `${daysUntil} days`}
-                      </div>
+                      <div className={`text-sm font-semibold ${rightColor}`}>{rightText}</div>
                     </div>
                   </div>
                 );
               })}
             </div>
+
+            <Button variant="outline" className="w-full" onClick={() => setEditDialogOpen(true)}>
+              Add / update dates
+            </Button>
           </motion.div>
         </div>
       </div>
@@ -255,10 +199,7 @@ export default function VehicleDetails() {
           <DialogHeader>
             <DialogTitle>Edit Vehicle</DialogTitle>
           </DialogHeader>
-          <VehicleForm
-            initialData={vehicle}
-            onSuccess={() => setEditDialogOpen(false)}
-          />
+          <VehicleForm initialData={vehicle} onSuccess={() => setEditDialogOpen(false)} />
         </DialogContent>
       </Dialog>
 
@@ -267,21 +208,31 @@ export default function VehicleDetails() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Vehicle?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete {vehicle.nickname} and all associated data.
-              This action cannot be undone.
+              This will permanently delete {vehicle.nickname} and all associated data. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-red-500 hover:bg-red-600"
-            >
+            <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </Layout>
+  );
+}
+
+function InfoRow({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div>
+        <div className="text-sm text-muted-foreground">{label}</div>
+        <div className="font-semibold">{value}</div>
+      </div>
+    </div>
   );
 }

@@ -16,7 +16,7 @@ const MOCK_DVLA_DATA = {
     year: 2019,
     color: 'Mythos Black',
     fuelType: 'Diesel',
-    isSorn: true, // ✅ example: SORN vehicle
+    isSorn: true,
   }
 };
 
@@ -30,9 +30,11 @@ export function useVehicles() {
       if (stored) {
         const parsed = JSON.parse(stored);
 
-        // ✅ Backwards-compatible migration: ensure isSorn exists
+        // ✅ Backwards-compatible migration
         const migrated = parsed.map(v => ({
           isSorn: false,
+          isUninsured: false,
+          insurancePolicyNumber: '',
           ...v,
         }));
 
@@ -53,8 +55,10 @@ export function useVehicles() {
             motExpiry: '2025-06-15',
             taxExpiry: '2025-03-20',
             insuranceExpiry: '2025-04-10',
+            insurancePolicyNumber: 'VG-TEST-001',
+            isUninsured: false,
             serviceDate: '2024-11-05',
-            isSorn: false, // ✅
+            isSorn: false,
             status: 'active',
             lastUpdated: new Date().toISOString()
           },
@@ -69,10 +73,12 @@ export function useVehicles() {
             fuelType: 'Diesel',
             mileage: 42350,
             motExpiry: '2025-01-08',
-            taxExpiry: '', // ✅ blank because SORN
-            insuranceExpiry: '2025-05-15',
+            taxExpiry: '',
+            insuranceExpiry: '',
+            insurancePolicyNumber: '',
+            isUninsured: true,
             serviceDate: '2024-10-20',
-            isSorn: true, // ✅
+            isSorn: true,
             status: 'warning',
             lastUpdated: new Date().toISOString()
           }
@@ -94,9 +100,12 @@ export function useVehicles() {
     const newVehicle = {
       id: Date.now().toString(),
       isSorn: false,
+      isUninsured: false,
+      insurancePolicyNumber: '',
       ...vehicleData,
-      // ✅ enforce: if SORN, taxExpiry blank
       taxExpiry: vehicleData?.isSorn ? '' : (vehicleData?.taxExpiry || ''),
+      insuranceExpiry: vehicleData?.isUninsured ? '' : (vehicleData?.insuranceExpiry || ''),
+      insurancePolicyNumber: vehicleData?.isUninsured ? '' : (vehicleData?.insurancePolicyNumber || ''),
       status: 'active',
       lastUpdated: new Date().toISOString()
     };
@@ -111,7 +120,10 @@ export function useVehicles() {
             ...v,
             ...updates,
             isSorn: !!updates?.isSorn,
+            isUninsured: !!updates?.isUninsured,
             taxExpiry: updates?.isSorn ? '' : (updates?.taxExpiry ?? v.taxExpiry),
+            insuranceExpiry: updates?.isUninsured ? '' : (updates?.insuranceExpiry ?? v.insuranceExpiry),
+            insurancePolicyNumber: updates?.isUninsured ? '' : (updates?.insurancePolicyNumber ?? v.insurancePolicyNumber),
             lastUpdated: new Date().toISOString()
           }
         : v
@@ -123,9 +135,21 @@ export function useVehicles() {
     saveVehicles(vehicles.filter(v => v.id !== id));
   };
 
-  const lookupDVLA = (registrationNumber) => {
-    const clean = registrationNumber.replace(/\s+/g, '').toUpperCase();
-    return MOCK_DVLA_DATA[clean] || null;
+  // ✅ REAL DVLA LOOKUP (via your local proxy server)
+  // React calls: /api/dvla/:vrm  -> server calls DVLA with x-api-key
+  const lookupDVLA = async (registrationNumber) => {
+    const clean = String(registrationNumber || '').replace(/\s+/g, '').toUpperCase();
+    if (!clean) return null;
+
+    try {
+      // Using relative URL assumes you set a Vite proxy for /api -> http://localhost:5174
+      const res = await fetch(`/api/dvla/${clean}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      // fallback to mock if server/proxy not running
+      return MOCK_DVLA_DATA[clean] || null;
+    }
   };
 
   return {

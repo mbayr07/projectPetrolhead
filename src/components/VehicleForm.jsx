@@ -24,56 +24,84 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
       motExpiry: '',
       taxExpiry: '',
       insuranceExpiry: '',
+      insurancePolicyNumber: '',
+      isUninsured: false,
       serviceDate: '',
-      isSorn: false, // ✅ NEW
+      isSorn: false,
     }
   );
 
+  // ✅ REAL DVLA LOOKUP
   const handleDVLALookup = async () => {
     if (!formData.registrationNumber) {
       toast({
         title: 'Registration Required',
         description: 'Please enter a registration number first.',
-        variant: 'destructive'
+        variant: 'destructive',
       });
       return;
     }
 
     setLoading(true);
 
-    setTimeout(() => {
-      const dvlaData = lookupDVLA(formData.registrationNumber);
+    try {
+      const dvla = await lookupDVLA(formData.registrationNumber);
 
-      if (dvlaData) {
-        setFormData(prev => ({
-          ...prev,
-          ...dvlaData,
-          // If lookup marks SORN, clear tax expiry
-          taxExpiry: dvlaData?.isSorn ? '' : (dvlaData?.taxExpiry ?? prev.taxExpiry),
-        }));
-        toast({
-          title: 'Vehicle Found!',
-          description: 'DVLA data loaded successfully (mock data)',
-        });
-      } else {
+      if (!dvla) {
         toast({
           title: 'Not Found',
-          description: 'No DVLA data available for this registration (try AB12CDE or XY98ZAB)',
-          variant: 'destructive'
+          description: 'No DVLA data returned for this registration.',
+          variant: 'destructive',
         });
+        return;
       }
 
+      const taxStatus = String(dvla.taxStatus || '').toUpperCase();
+      const isSornFromDVLA = taxStatus === 'SORN';
+
+      setFormData(prev => ({
+        ...prev,
+
+        // Core vehicle info
+        make: dvla.make ?? prev.make,
+        model: dvla.model ?? prev.model,
+        year: dvla.yearOfManufacture ?? prev.year,
+        color: dvla.colour ?? prev.color,
+        fuelType: dvla.fuelType ?? prev.fuelType,
+
+        // Dates (only set if present)
+        motExpiry: dvla.motExpiryDate ?? prev.motExpiry,
+        taxExpiry: isSornFromDVLA ? '' : (dvla.taxDueDate ?? prev.taxExpiry),
+
+        // Flags
+        isSorn: isSornFromDVLA ? true : prev.isSorn,
+      }));
+
+      toast({
+        title: 'Vehicle Found!',
+        description: 'DVLA data loaded successfully.',
+      });
+    } catch (err) {
+      toast({
+        title: 'Lookup failed',
+        description: 'Could not fetch DVLA data. Is the server running?',
+        variant: 'destructive',
+      });
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // ✅ enforce: if SORN, taxExpiry should be blank
     const payload = {
       ...formData,
-      taxExpiry: formData.isSorn ? '' : formData.taxExpiry,
+      taxExpiry: formData.isSorn ? '' : (formData.taxExpiry || ''),
+      insuranceExpiry: formData.isUninsured ? '' : (formData.insuranceExpiry || ''),
+      insurancePolicyNumber: formData.isUninsured ? '' : (formData.insurancePolicyNumber || ''),
+      motExpiry: formData.motExpiry || '',
+      serviceDate: formData.serviceDate || '',
     };
 
     if (initialData) {
@@ -96,21 +124,22 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
 
-    // ✅ special case for checkbox
     if (type === 'checkbox') {
       setFormData(prev => {
         const next = { ...prev, [name]: checked };
-        // When SORN is enabled, clear tax expiry
+
         if (name === 'isSorn' && checked) next.taxExpiry = '';
+        if (name === 'isUninsured' && checked) {
+          next.insuranceExpiry = '';
+          next.insurancePolicyNumber = '';
+        }
+
         return next;
       });
       return;
     }
 
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   return (
@@ -158,7 +187,7 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
           />
         </div>
 
-        {/* ✅ NEW: SORN checkbox */}
+        {/* SORN */}
         <div className="flex items-start gap-3 rounded-xl border border-border bg-card/40 p-4">
           <input
             id="isSorn"
@@ -168,153 +197,101 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
             onChange={handleChange}
             className="mt-1 h-4 w-4 accent-primary"
           />
-          <div className="space-y-1">
-            <Label htmlFor="isSorn" className="cursor-pointer">
-              Currently SORN
-            </Label>
+          <div>
+            <Label htmlFor="isSorn" className="cursor-pointer">Currently SORN</Label>
             <p className="text-xs text-muted-foreground">
-              Tick this if the vehicle is declared off the road. Tax expiry won’t be required.
+              If ticked, Tax date becomes “not applicable”.
+            </p>
+          </div>
+        </div>
+
+        {/* Uninsured */}
+        <div className="flex items-start gap-3 rounded-xl border border-border bg-card/40 p-4">
+          <input
+            id="isUninsured"
+            name="isUninsured"
+            type="checkbox"
+            checked={!!formData.isUninsured}
+            onChange={handleChange}
+            className="mt-1 h-4 w-4 accent-primary"
+          />
+          <div>
+            <Label htmlFor="isUninsured" className="cursor-pointer">Currently not insured</Label>
+            <p className="text-xs text-muted-foreground">
+              If ticked, Insurance date & policy number become “not applicable”.
             </p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="make">Make</Label>
-            <Input
-              id="make"
-              name="make"
-              value={formData.make}
-              onChange={handleChange}
-              placeholder="BMW"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="model">Model</Label>
-            <Input
-              id="model"
-              name="model"
-              value={formData.model}
-              onChange={handleChange}
-              placeholder="M3"
-              required
-            />
-          </div>
+          <InputField label="Make" name="make" value={formData.make} onChange={handleChange} required />
+          <InputField label="Model" name="model" value={formData.model} onChange={handleChange} required />
         </div>
 
         <div className="grid grid-cols-3 gap-4">
-          <div>
-            <Label htmlFor="year">Year</Label>
-            <Input
-              id="year"
-              name="year"
-              type="number"
-              value={formData.year}
-              onChange={handleChange}
-              placeholder="2020"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="color">Color</Label>
-            <Input
-              id="color"
-              name="color"
-              value={formData.color}
-              onChange={handleChange}
-              placeholder="Alpine White"
-            />
-          </div>
-          <div>
-            <Label htmlFor="fuelType">Fuel Type</Label>
-            <Input
-              id="fuelType"
-              name="fuelType"
-              value={formData.fuelType}
-              onChange={handleChange}
-              placeholder="Petrol"
-            />
-          </div>
+          <InputField label="Year" name="year" type="number" value={formData.year} onChange={handleChange} required />
+          <InputField label="Color" name="color" value={formData.color} onChange={handleChange} />
+          <InputField label="Fuel Type" name="fuelType" value={formData.fuelType} onChange={handleChange} />
         </div>
 
-        <div>
-          <Label htmlFor="mileage">Mileage</Label>
-          <Input
-            id="mileage"
-            name="mileage"
-            type="number"
-            value={formData.mileage}
-            onChange={handleChange}
-            placeholder="15000"
-          />
-        </div>
+        <InputField label="Mileage" name="mileage" type="number" value={formData.mileage} onChange={handleChange} />
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="motExpiry">MOT Expiry</Label>
-            <Input
-              id="motExpiry"
-              name="motExpiry"
-              type="date"
-              value={formData.motExpiry}
-              onChange={handleChange}
-              required
-            />
-          </div>
+        <DateField label="MOT Expiry" name="motExpiry" value={formData.motExpiry} onChange={handleChange} />
 
-          <div>
-            <Label htmlFor="taxExpiry">Tax Expiry</Label>
-            <Input
-              id="taxExpiry"
-              name="taxExpiry"
-              type="date"
-              value={formData.taxExpiry}
-              onChange={handleChange}
-              disabled={!!formData.isSorn}
-              required={!formData.isSorn}
-            />
-            {formData.isSorn && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Tax is not required while SORN.
-              </p>
-            )}
-          </div>
-        </div>
+        <DateField
+          label="Tax Expiry"
+          name="taxExpiry"
+          value={formData.taxExpiry}
+          onChange={handleChange}
+          disabled={formData.isSorn}
+          hint={formData.isSorn ? 'Not applicable while SORN.' : undefined}
+        />
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="insuranceExpiry">Insurance Expiry</Label>
-            <Input
-              id="insuranceExpiry"
-              name="insuranceExpiry"
-              type="date"
-              value={formData.insuranceExpiry}
-              onChange={handleChange}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="serviceDate">Last Service</Label>
-            <Input
-              id="serviceDate"
-              name="serviceDate"
-              type="date"
-              value={formData.serviceDate}
-              onChange={handleChange}
-            />
-          </div>
-        </div>
+        <DateField
+          label="Insurance Expiry"
+          name="insuranceExpiry"
+          value={formData.insuranceExpiry}
+          onChange={handleChange}
+          disabled={formData.isUninsured}
+          hint={formData.isUninsured ? 'Not applicable while not insured.' : undefined}
+        />
+
+        <InputField
+          label="Insurance Policy Number"
+          name="insurancePolicyNumber"
+          value={formData.insurancePolicyNumber}
+          onChange={handleChange}
+          disabled={formData.isUninsured}
+        />
+
+        <DateField label="Last Service" name="serviceDate" value={formData.serviceDate} onChange={handleChange} />
       </div>
 
-      <div className="flex gap-3 pt-4">
-        <Button
-          type="submit"
-          className="flex-1 bg-gradient-to-r from-primary to-secondary"
-        >
-          {initialData ? 'Update Vehicle' : 'Add Vehicle'}
-        </Button>
-      </div>
+      <Button type="submit" className="w-full bg-gradient-to-r from-primary to-secondary">
+        {initialData ? 'Update Vehicle' : 'Add Vehicle'}
+      </Button>
     </form>
+  );
+}
+
+function InputField({ label, hint, ...props }) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <Input {...props} />
+      {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+function DateField({ label, hint, ...props }) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <Input type="date" {...props} />
+      <p className="text-xs text-muted-foreground mt-1">
+        {hint || 'Leave blank = No data held.'}
+      </p>
+    </div>
   );
 }
