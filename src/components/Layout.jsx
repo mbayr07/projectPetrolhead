@@ -1,87 +1,85 @@
-import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  LayoutDashboard, 
-  FileText, 
-  Bell, 
-  BarChart3, 
-  User, 
+import React from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import {
+  LayoutDashboard,
+  FileText,
+  Bell,
+  BarChart3,
+  User,
   LogOut,
-  Menu,
-  X,
-  Car
-} from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
-import { Button } from '@/components/ui/button';
+  Car,
+} from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: FileText, label: 'Documents', path: '/documents' },
-    { icon: Bell, label: 'Reminders', path: '/reminders' },
-    { icon: BarChart3, label: 'Reports', path: '/reports' },
+  const tabs = [
+    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+    { icon: FileText, label: "Docs", path: "/documents" },
+    { icon: Bell, label: "Reminders", path: "/reminders" },
+    { icon: BarChart3, label: "Reports", path: "/reports" },
+    { icon: User, label: "Profile", path: "/profile" },
   ];
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate("/login");
   };
 
   const getInitials = (name) => {
-    return name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U';
+    return name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "U";
+  };
+
+  const isActive = (path) => {
+    // Exact match OR nested routes (e.g. /vehicle/:id should still highlight Dashboard)
+    if (path === "/dashboard") {
+      return (
+        location.pathname === "/dashboard" ||
+        location.pathname.startsWith("/vehicle/")
+      );
+    }
+    return location.pathname === path || location.pathname.startsWith(path + "/");
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Top Navigation */}
-      <nav className="fixed top-0 left-0 right-0 h-16 bg-card border-b border-border z-50 flex items-center px-4 lg:px-6">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-          >
-            {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
-          
-          <Link to="/dashboard" className="flex items-center gap-2">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-              <Car className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-xl font-bold hidden sm:inline bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              Vehicle Guardian
-            </span>
-          </Link>
-        </div>
+    <div className="min-h-dvh bg-background text-foreground">
+      {/* Top Bar */}
+      <header className="fixed top-0 left-0 right-0 h-14 bg-card border-b border-border z-50 flex items-center px-4">
+        <Link to="/dashboard" className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+            <Car className="h-5 w-5 text-white" />
+          </div>
+          <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            Vehicle Guardian
+          </span>
+        </Link>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-10 gap-2">
+              <Button variant="ghost" className="h-10 px-2 gap-2">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-white">
                     {getInitials(user?.name)}
                   </AvatarFallback>
                 </Avatar>
-                <span className="hidden sm:inline">{user?.name}</span>
+                <span className="text-sm">{user?.name || "User"}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => navigate('/profile')}>
+              <DropdownMenuItem onClick={() => navigate("/profile")}>
                 <User className="mr-2 h-4 w-4" />
                 Profile
               </DropdownMenuItem>
@@ -92,68 +90,47 @@ export default function Layout({ children }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </nav>
+      </header>
 
-      {/* Sidebar */}
-      <AnimatePresence>
-        {(sidebarOpen || window.innerWidth >= 1024) && (
-          <>
-            {/* Mobile Overlay */}
-            {sidebarOpen && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-                onClick={() => setSidebarOpen(false)}
-              />
-            )}
-
-            {/* Sidebar */}
-            <motion.aside
-              initial={{ x: -280 }}
-              animate={{ x: 0 }}
-              exit={{ x: -280 }}
-              transition={{ type: 'spring', damping: 20 }}
-              className="fixed left-0 top-16 bottom-0 w-64 bg-card border-r border-border z-40 overflow-y-auto"
-            >
-              <nav className="p-4 space-y-2">
-                {menuItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = location.pathname === item.path;
-                  
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={() => setSidebarOpen(false)}
-                    >
-                      <motion.div
-                        whileHover={{ x: 4 }}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                          isActive
-                            ? 'bg-gradient-to-r from-primary/20 to-secondary/20 text-primary border border-primary/30'
-                            : 'hover:bg-muted text-muted-foreground'
-                        }`}
-                      >
-                        <Icon className="h-5 w-5" />
-                        <span className="font-medium">{item.label}</span>
-                      </motion.div>
-                    </Link>
-                  );
-                })}
-              </nav>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Main Content */}
-      <main className="pt-16 lg:pl-64 min-h-screen">
-        <div className="p-4 lg:p-6">
-          {children}
-        </div>
+      {/* Content (scrollable) */}
+      <main className="pt-14 pb-[76px] min-h-dvh">
+        <div className="p-4">{children}</div>
       </main>
+
+      {/* Bottom Nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border pb-[env(safe-area-inset-bottom)]">
+        <div className="mx-auto max-w-[430px] px-2">
+          <div className="h-[64px] flex items-center justify-between">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = isActive(tab.path);
+
+              return (
+                <Link
+                  key={tab.path}
+                  to={tab.path}
+                  className="flex-1"
+                  aria-label={tab.label}
+                >
+                  <motion.div
+                    whileTap={{ scale: 0.97 }}
+                    className={`mx-1 rounded-xl px-2 py-2 flex flex-col items-center justify-center gap-1 transition-colors ${
+                      active
+                        ? "bg-gradient-to-r from-primary/20 to-secondary/20 text-primary border border-primary/30"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span className="text-[11px] font-medium leading-none">
+                      {tab.label}
+                    </span>
+                  </motion.div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
 import { Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,20 +10,24 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
   const { addVehicle, updateVehicle, lookupDVLA } = useVehicles();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState(initialData || {
-    registrationNumber: '',
-    nickname: '',
-    make: '',
-    model: '',
-    year: '',
-    color: '',
-    fuelType: '',
-    mileage: '',
-    motExpiry: '',
-    taxExpiry: '',
-    insuranceExpiry: '',
-    serviceDate: ''
-  });
+
+  const [formData, setFormData] = useState(
+    initialData || {
+      registrationNumber: '',
+      nickname: '',
+      make: '',
+      model: '',
+      year: '',
+      color: '',
+      fuelType: '',
+      mileage: '',
+      motExpiry: '',
+      taxExpiry: '',
+      insuranceExpiry: '',
+      serviceDate: '',
+      isSorn: false, // ✅ NEW
+    }
+  );
 
   const handleDVLALookup = async () => {
     if (!formData.registrationNumber) {
@@ -37,14 +40,16 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
     }
 
     setLoading(true);
-    
+
     setTimeout(() => {
       const dvlaData = lookupDVLA(formData.registrationNumber);
-      
+
       if (dvlaData) {
         setFormData(prev => ({
           ...prev,
-          ...dvlaData
+          ...dvlaData,
+          // If lookup marks SORN, clear tax expiry
+          taxExpiry: dvlaData?.isSorn ? '' : (dvlaData?.taxExpiry ?? prev.taxExpiry),
         }));
         toast({
           title: 'Vehicle Found!',
@@ -57,36 +62,55 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
           variant: 'destructive'
         });
       }
-      
+
       setLoading(false);
     }, 1000);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
+    // ✅ enforce: if SORN, taxExpiry should be blank
+    const payload = {
+      ...formData,
+      taxExpiry: formData.isSorn ? '' : formData.taxExpiry,
+    };
+
     if (initialData) {
-      updateVehicle(initialData.id, formData);
+      updateVehicle(initialData.id, payload);
       toast({
         title: 'Vehicle Updated',
         description: 'Vehicle details have been updated successfully.',
       });
     } else {
-      addVehicle(formData);
+      addVehicle(payload);
       toast({
         title: 'Vehicle Added',
         description: 'New vehicle has been added to your fleet.',
       });
     }
-    
+
     onSuccess?.();
   };
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value, type, checked } = e.target;
+
+    // ✅ special case for checkbox
+    if (type === 'checkbox') {
+      setFormData(prev => {
+        const next = { ...prev, [name]: checked };
+        // When SORN is enabled, clear tax expiry
+        if (name === 'isSorn' && checked) next.taxExpiry = '';
+        return next;
+      });
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   return (
@@ -132,6 +156,26 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
             placeholder="e.g., My M3"
             required
           />
+        </div>
+
+        {/* ✅ NEW: SORN checkbox */}
+        <div className="flex items-start gap-3 rounded-xl border border-border bg-card/40 p-4">
+          <input
+            id="isSorn"
+            name="isSorn"
+            type="checkbox"
+            checked={!!formData.isSorn}
+            onChange={handleChange}
+            className="mt-1 h-4 w-4 accent-primary"
+          />
+          <div className="space-y-1">
+            <Label htmlFor="isSorn" className="cursor-pointer">
+              Currently SORN
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Tick this if the vehicle is declared off the road. Tax expiry won’t be required.
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -218,6 +262,7 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
               required
             />
           </div>
+
           <div>
             <Label htmlFor="taxExpiry">Tax Expiry</Label>
             <Input
@@ -226,8 +271,14 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
               type="date"
               value={formData.taxExpiry}
               onChange={handleChange}
-              required
+              disabled={!!formData.isSorn}
+              required={!formData.isSorn}
             />
+            {formData.isSorn && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Tax is not required while SORN.
+              </p>
+            )}
           </div>
         </div>
 

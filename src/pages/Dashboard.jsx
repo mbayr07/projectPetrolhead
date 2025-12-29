@@ -22,19 +22,27 @@ export default function Dashboard() {
   const getActiveAlerts = () => {
     const now = new Date();
     let alerts = 0;
-    
+
+    const daysDiff = (date) => Math.floor((date - now) / (1000 * 60 * 60 * 24));
+
     vehicles.forEach(vehicle => {
       const motDate = new Date(vehicle.motExpiry);
-      const taxDate = new Date(vehicle.taxExpiry);
       const insuranceDate = new Date(vehicle.insuranceExpiry);
-      
-      const daysDiff = (date) => Math.floor((date - now) / (1000 * 60 * 60 * 24));
-      
-      if (daysDiff(motDate) < 30 || daysDiff(taxDate) < 30 || daysDiff(insuranceDate) < 30) {
+
+      const motDays = daysDiff(motDate);
+      const insuranceDays = daysDiff(insuranceDate);
+
+      // ✅ Only consider Tax if NOT SORN
+      let taxDays = 9999;
+      if (!vehicle.isSorn && vehicle.taxExpiry) {
+        taxDays = daysDiff(new Date(vehicle.taxExpiry));
+      }
+
+      if (motDays < 30 || insuranceDays < 30 || taxDays < 30) {
         alerts++;
       }
     });
-    
+
     return alerts;
   };
 
@@ -59,7 +67,7 @@ export default function Dashboard() {
               Manage your fleet and stay on top of maintenance
             </p>
           </div>
-          
+
           <Button
             onClick={() => setAddDialogOpen(true)}
             className="bg-gradient-to-r from-primary to-secondary"

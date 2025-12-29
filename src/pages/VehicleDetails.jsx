@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  Edit, 
-  Trash2, 
+import {
+  ArrowLeft,
+  Edit,
+  Trash2,
   Calendar,
   Gauge,
   Droplet,
@@ -72,6 +72,14 @@ export default function VehicleDetails() {
     return Math.floor((target - now) / (1000 * 60 * 60 * 24));
   };
 
+  // ✅ build expiry list, excluding Tax when SORN
+  const expiryItems = [
+    { label: 'MOT', date: vehicle.motExpiry },
+    ...(vehicle.isSorn ? [] : [{ label: 'Tax', date: vehicle.taxExpiry }]),
+    { label: 'Insurance', date: vehicle.insuranceExpiry },
+    { label: 'Last Service', date: vehicle.serviceDate }
+  ].filter(i => !!i.date);
+
   return (
     <Layout>
       <Helmet>
@@ -88,12 +96,21 @@ export default function VehicleDetails() {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
+
           <div className="flex-1">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              {vehicle.nickname}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                {vehicle.nickname}
+              </h1>
+              {vehicle.isSorn && (
+                <span className="text-xs px-2 py-1 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-500 font-semibold">
+                  SORN
+                </span>
+              )}
+            </div>
             <p className="text-muted-foreground">{vehicle.registrationNumber}</p>
           </div>
+
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -120,7 +137,7 @@ export default function VehicleDetails() {
             className="bg-card border border-border rounded-xl p-6 space-y-4"
           >
             <h2 className="text-xl font-bold mb-4">Vehicle Information</h2>
-            
+
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
@@ -180,18 +197,19 @@ export default function VehicleDetails() {
             className="bg-card border border-border rounded-xl p-6 space-y-4"
           >
             <h2 className="text-xl font-bold mb-4">Expiry Dates</h2>
-            
+
+            {vehicle.isSorn && (
+              <div className="text-sm text-muted-foreground -mt-2">
+                Tax is not shown because this vehicle is currently SORN.
+              </div>
+            )}
+
             <div className="space-y-4">
-              {[
-                { label: 'MOT', date: vehicle.motExpiry },
-                { label: 'Tax', date: vehicle.taxExpiry },
-                { label: 'Insurance', date: vehicle.insuranceExpiry },
-                { label: 'Last Service', date: vehicle.serviceDate }
-              ].map((item) => {
+              {expiryItems.map((item) => {
                 const daysUntil = getDaysUntil(item.date);
                 const isExpired = daysUntil < 0;
                 const isWarning = daysUntil >= 0 && daysUntil < 30;
-                
+
                 return (
                   <div
                     key={item.label}
@@ -221,10 +239,7 @@ export default function VehicleDetails() {
                           ? 'text-yellow-500'
                           : 'text-green-500'
                       }`}>
-                        {isExpired
-                          ? 'Expired'
-                          : `${daysUntil} days`
-                        }
+                        {isExpired ? 'Expired' : `${daysUntil} days`}
                       </div>
                     </div>
                   </div>

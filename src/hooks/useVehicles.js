@@ -2,19 +2,21 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
 const MOCK_DVLA_DATA = {
-  'AB12CDE': {
+  AB12CDE: {
     make: 'BMW',
     model: 'M3',
     year: 2020,
     color: 'Alpine White',
-    fuelType: 'Petrol'
+    fuelType: 'Petrol',
+    isSorn: false,
   },
-  'XY98ZAB': {
+  XY98ZAB: {
     make: 'Audi',
     model: 'A4',
     year: 2019,
     color: 'Mythos Black',
-    fuelType: 'Diesel'
+    fuelType: 'Diesel',
+    isSorn: true, // ✅ example: SORN vehicle
   }
 };
 
@@ -26,7 +28,16 @@ export function useVehicles() {
     if (user) {
       const stored = localStorage.getItem(`vg_vehicles_${user.id}`);
       if (stored) {
-        setVehicles(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+
+        // ✅ Backwards-compatible migration: ensure isSorn exists
+        const migrated = parsed.map(v => ({
+          isSorn: false,
+          ...v,
+        }));
+
+        setVehicles(migrated);
+        localStorage.setItem(`vg_vehicles_${user.id}`, JSON.stringify(migrated));
       } else {
         const defaultVehicles = [
           {
@@ -43,6 +54,7 @@ export function useVehicles() {
             taxExpiry: '2025-03-20',
             insuranceExpiry: '2025-04-10',
             serviceDate: '2024-11-05',
+            isSorn: false, // ✅
             status: 'active',
             lastUpdated: new Date().toISOString()
           },
@@ -57,9 +69,10 @@ export function useVehicles() {
             fuelType: 'Diesel',
             mileage: 42350,
             motExpiry: '2025-01-08',
-            taxExpiry: '2025-02-28',
+            taxExpiry: '', // ✅ blank because SORN
             insuranceExpiry: '2025-05-15',
             serviceDate: '2024-10-20',
+            isSorn: true, // ✅
             status: 'warning',
             lastUpdated: new Date().toISOString()
           }
@@ -80,7 +93,10 @@ export function useVehicles() {
   const addVehicle = (vehicleData) => {
     const newVehicle = {
       id: Date.now().toString(),
+      isSorn: false,
       ...vehicleData,
+      // ✅ enforce: if SORN, taxExpiry blank
+      taxExpiry: vehicleData?.isSorn ? '' : (vehicleData?.taxExpiry || ''),
       status: 'active',
       lastUpdated: new Date().toISOString()
     };
@@ -89,8 +105,16 @@ export function useVehicles() {
   };
 
   const updateVehicle = (id, updates) => {
-    const updated = vehicles.map(v => 
-      v.id === id ? { ...v, ...updates, lastUpdated: new Date().toISOString() } : v
+    const updated = vehicles.map(v =>
+      v.id === id
+        ? {
+            ...v,
+            ...updates,
+            isSorn: !!updates?.isSorn,
+            taxExpiry: updates?.isSorn ? '' : (updates?.taxExpiry ?? v.taxExpiry),
+            lastUpdated: new Date().toISOString()
+          }
+        : v
     );
     saveVehicles(updated);
   };
@@ -100,7 +124,8 @@ export function useVehicles() {
   };
 
   const lookupDVLA = (registrationNumber) => {
-    return MOCK_DVLA_DATA[registrationNumber.toUpperCase()] || null;
+    const clean = registrationNumber.replace(/\s+/g, '').toUpperCase();
+    return MOCK_DVLA_DATA[clean] || null;
   };
 
   return {
