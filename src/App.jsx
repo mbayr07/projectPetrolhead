@@ -28,12 +28,10 @@ function PublicRoute({ children }) {
   return !user ? children : <Navigate to="/dashboard" replace />;
 }
 
-// Mobile UX: when navigating, scroll to top (feels way better on phones)
 function ScrollToTop() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    // Use instant scroll to avoid “jank” on mobile transitions
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [pathname]);
 
@@ -57,86 +55,91 @@ function App() {
         />
         <meta name="theme-color" content="#0b0f17" />
 
-        {/* iOS “app-like” behaviour (optional but nice) */}
+        {/* iOS “app-like” behaviour */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta
+          name="apple-mobile-web-app-status-bar-style"
+          content="black-translucent"
+        />
       </Helmet>
 
-      {/* dvh avoids mobile browser address-bar 100vh bugs */}
-      <div className="min-h-dvh w-full bg-background text-foreground pb-[env(safe-area-inset-bottom)]">
-        <Router>
-          <ScrollToTop />
+      {/* Always render as a phone-sized app frame (desktop shows a centred “device”) */}
+      <div className="min-h-dvh w-full bg-neutral-900 flex justify-center items-start sm:items-center">
+        <div className="w-full max-w-[430px] min-h-dvh bg-background text-foreground shadow-2xl sm:rounded-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]">
+          <Router>
+            <ScrollToTop />
 
-          <Routes>
-            <Route
-              path="/login"
-              element={
-                <PublicRoute>
-                  <Login />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/signup"
-              element={
-                <PublicRoute>
-                  <Signup />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <PrivateRoute>
-                  <Dashboard />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/vehicle/:id"
-              element={
-                <PrivateRoute>
-                  <VehicleDetails />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/documents"
-              element={
-                <PrivateRoute>
-                  <DocumentVault />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/reminders"
-              element={
-                <PrivateRoute>
-                  <Reminders />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/reports"
-              element={
-                <PrivateRoute>
-                  <Reports />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <PrivateRoute>
-                  <Profile />
-                </PrivateRoute>
-              }
-            />
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </Router>
+            <Routes>
+              <Route
+                path="/login"
+                element={
+                  <PublicRoute>
+                    <Login />
+                  </PublicRoute>
+                }
+              />
+              <Route
+                path="/signup"
+                element={
+                  <PublicRoute>
+                    <Signup />
+                  </PublicRoute>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <PrivateRoute>
+                    <Dashboard />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/vehicle/:id"
+                element={
+                  <PrivateRoute>
+                    <VehicleDetails />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/documents"
+                element={
+                  <PrivateRoute>
+                    <DocumentVault />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/reminders"
+                element={
+                  <PrivateRoute>
+                    <Reminders />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/reports"
+                element={
+                  <PrivateRoute>
+                    <Reports />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <PrivateRoute>
+                    <Profile />
+                  </PrivateRoute>
+                }
+              />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </Router>
 
-        <Toaster />
+          <Toaster />
+        </div>
       </div>
     </AuthProvider>
   );
