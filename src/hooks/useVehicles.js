@@ -21,79 +21,88 @@ const MOCK_DVLA_DATA = {
 };
 
 export function useVehicles() {
-  const { user } = useAuth();
+  // ✅ Guard against useAuth() returning undefined (prevents black screen)
+  const auth = typeof useAuth === 'function' ? useAuth() : null;
+  const user = auth?.user || null;
+
   const [vehicles, setVehicles] = useState([]);
 
   useEffect(() => {
-    if (user) {
-      const stored = localStorage.getItem(`vg_vehicles_${user.id}`);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-
-        // ✅ Backwards-compatible migration
-        const migrated = parsed.map(v => ({
-          isSorn: false,
-          isUninsured: false,
-          insurancePolicyNumber: '',
-          ...v,
-        }));
-
-        setVehicles(migrated);
-        localStorage.setItem(`vg_vehicles_${user.id}`, JSON.stringify(migrated));
-      } else {
-        const defaultVehicles = [
-          {
-            id: '1',
-            registrationNumber: 'AB12CDE',
-            nickname: 'My M3',
-            make: 'BMW',
-            model: 'M3',
-            year: 2020,
-            color: 'Alpine White',
-            fuelType: 'Petrol',
-            mileage: 15420,
-            motExpiry: '2025-06-15',
-            taxExpiry: '2025-03-20',
-            insuranceExpiry: '2025-04-10',
-            insurancePolicyNumber: 'VG-TEST-001',
-            isUninsured: false,
-            serviceDate: '2024-11-05',
-            isSorn: false,
-            status: 'active',
-            lastUpdated: new Date().toISOString()
-          },
-          {
-            id: '2',
-            registrationNumber: 'XY98ZAB',
-            nickname: 'Daily Driver',
-            make: 'Audi',
-            model: 'A4',
-            year: 2019,
-            color: 'Mythos Black',
-            fuelType: 'Diesel',
-            mileage: 42350,
-            motExpiry: '2025-01-08',
-            taxExpiry: '',
-            insuranceExpiry: '',
-            insurancePolicyNumber: '',
-            isUninsured: true,
-            serviceDate: '2024-10-20',
-            isSorn: true,
-            status: 'warning',
-            lastUpdated: new Date().toISOString()
-          }
-        ];
-        localStorage.setItem(`vg_vehicles_${user.id}`, JSON.stringify(defaultVehicles));
-        setVehicles(defaultVehicles);
-      }
+    // If no user yet, don't try to read/write localStorage
+    if (!user?.id) {
+      setVehicles([]);
+      return;
     }
-  }, [user]);
+
+    const key = `vg_vehicles_${user.id}`;
+    const stored = localStorage.getItem(key);
+
+    if (stored) {
+      const parsed = JSON.parse(stored);
+
+      // ✅ Backwards-compatible migration
+      const migrated = parsed.map(v => ({
+        isSorn: false,
+        isUninsured: false,
+        insurancePolicyNumber: '',
+        ...v,
+      }));
+
+      setVehicles(migrated);
+      localStorage.setItem(key, JSON.stringify(migrated));
+    } else {
+      const defaultVehicles = [
+        {
+          id: '1',
+          registrationNumber: 'AB12CDE',
+          nickname: 'My M3',
+          make: 'BMW',
+          model: 'M3',
+          year: 2020,
+          color: 'Alpine White',
+          fuelType: 'Petrol',
+          mileage: 15420,
+          motExpiry: '2025-06-15',
+          taxExpiry: '2025-03-20',
+          insuranceExpiry: '2025-04-10',
+          insurancePolicyNumber: 'VG-TEST-001',
+          isUninsured: false,
+          serviceDate: '2024-11-05',
+          isSorn: false,
+          status: 'active',
+          lastUpdated: new Date().toISOString()
+        },
+        {
+          id: '2',
+          registrationNumber: 'XY98ZAB',
+          nickname: 'Daily Driver',
+          make: 'Audi',
+          model: 'A4',
+          year: 2019,
+          color: 'Mythos Black',
+          fuelType: 'Diesel',
+          mileage: 42350,
+          motExpiry: '2025-01-08',
+          taxExpiry: '',
+          insuranceExpiry: '',
+          insurancePolicyNumber: '',
+          isUninsured: true,
+          serviceDate: '2024-10-20',
+          isSorn: true,
+          status: 'warning',
+          lastUpdated: new Date().toISOString()
+        }
+      ];
+
+      localStorage.setItem(key, JSON.stringify(defaultVehicles));
+      setVehicles(defaultVehicles);
+    }
+  }, [user?.id]);
 
   const saveVehicles = (newVehicles) => {
-    if (user) {
-      localStorage.setItem(`vg_vehicles_${user.id}`, JSON.stringify(newVehicles));
-      setVehicles(newVehicles);
-    }
+    if (!user?.id) return;
+    localStorage.setItem(`vg_vehicles_${user.id}`, JSON.stringify(newVehicles));
+    setVehicles(newVehicles);
   };
 
   const addVehicle = (vehicleData) => {
@@ -109,6 +118,7 @@ export function useVehicles() {
       status: 'active',
       lastUpdated: new Date().toISOString()
     };
+
     saveVehicles([...vehicles, newVehicle]);
     return newVehicle;
   };
@@ -136,18 +146,15 @@ export function useVehicles() {
   };
 
   // ✅ REAL DVLA LOOKUP (via your local proxy server)
-  // React calls: /api/dvla/:vrm  -> server calls DVLA with x-api-key
   const lookupDVLA = async (registrationNumber) => {
     const clean = String(registrationNumber || '').replace(/\s+/g, '').toUpperCase();
     if (!clean) return null;
 
     try {
-      // Using relative URL assumes you set a Vite proxy for /api -> http://localhost:5174
       const res = await fetch(`/api/dvla/${clean}`);
       if (!res.ok) return null;
       return await res.json();
     } catch (err) {
-      // fallback to mock if server/proxy not running
       return MOCK_DVLA_DATA[clean] || null;
     }
   };

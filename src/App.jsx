@@ -9,6 +9,7 @@ import {
 import { Helmet } from "react-helmet";
 import { Toaster } from "@/components/ui/toaster";
 import AuthProvider, { useAuth } from "@/context/AuthContext";
+
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import Dashboard from "@/pages/Dashboard";
@@ -38,37 +39,33 @@ function ScrollToTop() {
   return null;
 }
 
-function App() {
+export default function App() {
   return (
-    <AuthProvider>
-      <Helmet>
-        <title>Vehicle Guardian</title>
-        <meta
-          name="description"
-          content="Manage vehicles with reminders, document storage, and reporting. Vehicle Guardian keeps you organised and compliant."
-        />
+    <Router>
+      <AuthProvider>
+        <Helmet>
+          <title>Vehicle Guardian</title>
+          <meta
+            name="description"
+            content="Manage vehicles with reminders, document storage, and reporting. Vehicle Guardian keeps you organised and compliant."
+          />
+          <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, viewport-fit=cover"
+          />
+          <meta name="theme-color" content="#0b0f17" />
+          <meta name="apple-mobile-web-app-capable" content="yes" />
+          <meta
+            name="apple-mobile-web-app-status-bar-style"
+            content="black-translucent"
+          />
+        </Helmet>
 
-        {/* Mobile-first essentials */}
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1, viewport-fit=cover"
-        />
-        <meta name="theme-color" content="#0b0f17" />
+        <ScrollToTop />
 
-        {/* iOS “app-like” behaviour */}
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta
-          name="apple-mobile-web-app-status-bar-style"
-          content="black-translucent"
-        />
-      </Helmet>
-
-      {/* Always render as a phone-sized app frame (desktop shows a centred “device”) */}
-      <div className="min-h-dvh w-full bg-neutral-900 flex justify-center items-start sm:items-center">
-        <div className="w-full max-w-[430px] min-h-dvh bg-background text-foreground shadow-2xl sm:rounded-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]">
-          <Router>
-            <ScrollToTop />
-
+        {/* Phone frame wrapper */}
+        <div className="min-h-dvh w-full bg-neutral-900 flex justify-center items-start sm:items-center">
+          <div className="w-full max-w-[430px] min-h-dvh bg-background text-foreground shadow-2xl sm:rounded-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]">
             <Routes>
               <Route
                 path="/login"
@@ -136,13 +133,11 @@ function App() {
               />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Routes>
-          </Router>
 
-          <Toaster />
+            <Toaster />
+          </div>
         </div>
-      </div>
-    </AuthProvider>
+      </AuthProvider>
+    </Router>
   );
 }
-
-export default App;

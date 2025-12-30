@@ -8,8 +8,14 @@ import VehicleForm from '@/components/VehicleForm';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useToast } from '@/components/ui/use-toast';
@@ -22,7 +28,7 @@ export default function VehicleDetails() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const vehicle = vehicles.find(v => v.id === id);
+  const vehicle = vehicles.find(v => String(v.id) === String(id));
 
   if (!vehicle) {
     return (
@@ -67,10 +73,25 @@ export default function VehicleDetails() {
     navigate('/dashboard');
   };
 
+  // Robust display helpers
+  const safeText = (v, fallback = 'No data held') => {
+    if (v === null || v === undefined) return fallback;
+    const s = String(v).trim();
+    return s.length ? s : fallback;
+  };
+
+  const safeMileage = () => {
+    const m = vehicle.mileage;
+    if (m === null || m === undefined || String(m).trim() === '') return 'No data held';
+    const n = Number(String(m).replace(/,/g, ''));
+    if (Number.isNaN(n)) return safeText(m);
+    return `${n.toLocaleString()} miles`;
+  };
+
   return (
     <Layout>
       <Helmet>
-        <title>{vehicle.nickname} - Vehicle Guardian</title>
+        <title>{safeText(vehicle.nickname, 'Vehicle')} - Vehicle Guardian</title>
       </Helmet>
 
       <div className="space-y-6">
@@ -82,7 +103,7 @@ export default function VehicleDetails() {
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                {vehicle.nickname}
+                {safeText(vehicle.nickname, 'Vehicle')}
               </h1>
 
               {vehicle.isSorn && (
@@ -98,45 +119,51 @@ export default function VehicleDetails() {
               )}
             </div>
 
-            <p className="text-muted-foreground">{vehicle.registrationNumber}</p>
+            <p className="text-muted-foreground">{safeText(vehicle.registrationNumber, '')}</p>
           </div>
 
           <div className="flex gap-2">
             <Button variant="outline" size="icon" onClick={() => setEditDialogOpen(true)}>
               <Edit className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" onClick={() => setDeleteDialogOpen(true)} className="text-red-500 hover:text-red-600">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setDeleteDialogOpen(true)}
+              className="text-red-500 hover:text-red-600"
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* ✅ MOBILE ONLY: no md:grid-cols-2 */}
+        <div className="grid grid-cols-1 gap-6">
           <motion.div
-            initial={{ opacity: 0, x: -20 }}
+            initial={{ opacity: 0, x: -14 }}
             animate={{ opacity: 1, x: 0 }}
             className="bg-card border border-border rounded-xl p-6 space-y-4"
           >
             <h2 className="text-xl font-bold mb-4">Vehicle Information</h2>
 
             <div className="space-y-3">
-              <InfoRow icon={FileText} label="Make & Model" value={`${vehicle.make} ${vehicle.model}`} />
-              <InfoRow icon={Calendar} label="Year" value={vehicle.year} />
-              <InfoRow icon={Palette} label="Color" value={vehicle.color || 'No data held'} />
-              <InfoRow icon={Droplet} label="Fuel Type" value={vehicle.fuelType || 'No data held'} />
-              <InfoRow icon={Gauge} label="Mileage" value={vehicle.mileage ? `${vehicle.mileage.toLocaleString()} miles` : 'No data held'} />
+              <InfoRow icon={FileText} label="Make & Model" value={safeText(`${vehicle.make || ''} ${vehicle.model || ''}`.trim())} />
+              <InfoRow icon={Calendar} label="Year" value={safeText(vehicle.year)} />
+              <InfoRow icon={Palette} label="Color" value={safeText(vehicle.color)} />
+              <InfoRow icon={Droplet} label="Fuel Type" value={safeText(vehicle.fuelType)} />
+              <InfoRow icon={Gauge} label="Mileage" value={safeMileage()} />
 
-              {!vehicle.isUninsured && vehicle.insurancePolicyNumber && (
+              {!vehicle.isUninsured && vehicle.insurancePolicyNumber && String(vehicle.insurancePolicyNumber).trim() && (
                 <div className="rounded-lg border border-border bg-muted/30 p-4">
                   <div className="text-sm text-muted-foreground">Insurance Policy Number</div>
-                  <div className="font-semibold break-all">{vehicle.insurancePolicyNumber}</div>
+                  <div className="font-semibold break-all">{String(vehicle.insurancePolicyNumber)}</div>
                 </div>
               )}
             </div>
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
+            initial={{ opacity: 0, x: 14 }}
             animate={{ opacity: 1, x: 0 }}
             className="bg-card border border-border rounded-xl p-6 space-y-4"
           >
@@ -145,8 +172,8 @@ export default function VehicleDetails() {
             <div className="space-y-4">
               {expiryItems.map((item) => {
                 const du = daysUntil(item.date);
-
                 const hasDate = du !== null;
+
                 const isExpired = hasDate && du < 0;
                 const isWarning = hasDate && du >= 0 && du < 30;
 
@@ -170,8 +197,8 @@ export default function VehicleDetails() {
 
                 return (
                   <div key={item.label} className={`p-4 rounded-lg border ${boxClass}`}>
-                    <div className="flex justify-between items-start">
-                      <div>
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="min-w-0">
                         <div className="font-semibold">{item.label}</div>
                         <div className="text-sm text-muted-foreground">{formatFull(item.date)}</div>
                         {!hasDate && (
@@ -180,7 +207,7 @@ export default function VehicleDetails() {
                           </div>
                         )}
                       </div>
-                      <div className={`text-sm font-semibold ${rightColor}`}>{rightText}</div>
+                      <div className={`text-sm font-semibold whitespace-nowrap ${rightColor}`}>{rightText}</div>
                     </div>
                   </div>
                 );
@@ -195,7 +222,7 @@ export default function VehicleDetails() {
       </div>
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[420px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Vehicle</DialogTitle>
           </DialogHeader>
@@ -208,7 +235,7 @@ export default function VehicleDetails() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Vehicle?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete {vehicle.nickname} and all associated data. This action cannot be undone.
+              This will permanently delete {safeText(vehicle.nickname, 'this vehicle')} and all associated data. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -229,9 +256,9 @@ function InfoRow({ icon: Icon, label, value }) {
       <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
         <Icon className="h-5 w-5" />
       </div>
-      <div>
+      <div className="min-w-0">
         <div className="text-sm text-muted-foreground">{label}</div>
-        <div className="font-semibold">{value}</div>
+        <div className="font-semibold break-words">{String(value ?? '')}</div>
       </div>
     </div>
   );
