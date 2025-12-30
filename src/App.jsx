@@ -33,6 +33,7 @@ function ScrollToTop() {
   const { pathname } = useLocation();
 
   useEffect(() => {
+    // keep inside scroll container too
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [pathname]);
 
@@ -63,24 +64,9 @@ export default function App() {
 
         <ScrollToTop />
 
-        {/* Desktop: centred phone frame. Mobile: full width. */}
-        <div className="min-h-dvh w-full bg-neutral-900 flex justify-center items-start sm:items-center p-4">
-          <div
-            className="
-              w-full max-w-[430px]
-              bg-background text-foreground
-              shadow-2xl
-              overflow-hidden
-              pb-[env(safe-area-inset-bottom)]
-              sm:rounded-2xl
-              sm:h-[calc(100dvh-2rem)]
-              sm:max-h-[calc(100dvh-2rem)]
-              lg:scale-[1.05]
-              xl:scale-[1.1]
-              origin-top
-            "
-          >
-            {/* IMPORTANT: Layout now handles internal scrolling (header/nav sticky inside) */}
+        {/* App frame: lock page scrolling, scroll happens INSIDE pages (Layout main) */}
+        <div className="h-dvh w-full bg-neutral-900 flex justify-center items-stretch sm:items-center sm:p-6 overflow-hidden">
+          <div className="w-full max-w-[430px] h-dvh sm:h-[min(860px,100dvh-3rem)] bg-background text-foreground shadow-2xl sm:rounded-2xl overflow-hidden">
             <Routes>
               <Route
                 path="/login"

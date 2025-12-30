@@ -38,8 +38,9 @@ export default function Layout({ children }) {
     navigate("/login");
   };
 
-  const getInitials = (name) =>
-    name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "U";
+  const getInitials = (name) => {
+    return name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "U";
+  };
 
   const isActive = (path) => {
     if (path === "/dashboard") {
@@ -48,17 +49,14 @@ export default function Layout({ children }) {
         location.pathname.startsWith("/vehicle/")
       );
     }
-    return (
-      location.pathname === path || location.pathname.startsWith(path + "/")
-    );
+    return location.pathname === path || location.pathname.startsWith(path + "/");
   };
 
   return (
-    // IMPORTANT: no fixed positioning in this file
-    // This Layout is meant to live INSIDE your phone frame
-    <div className="h-full min-h-dvh bg-background text-foreground flex flex-col">
-      {/* Top Bar (sticky INSIDE container) */}
-      <header className="sticky top-0 z-50 h-14 bg-card border-b border-border flex items-center px-4">
+    // ✅ App-like shell: header + scrollable content + bottom nav anchored
+    <div className="h-full bg-background text-foreground flex flex-col">
+      {/* Top Bar (anchored) */}
+      <header className="h-14 shrink-0 bg-card border-b border-border flex items-center px-4">
         <Link to="/dashboard" className="flex items-center gap-2">
           <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
             <Car className="h-5 w-5 text-white" />
@@ -94,13 +92,15 @@ export default function Layout({ children }) {
         </div>
       </header>
 
-      {/* Content (scrolls inside phone frame) */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-4 pb-24">{children}</div>
+      {/* Scrollable Content (ONLY this scrolls) */}
+      <main className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="p-4 pb-6">{children}</div>
+        {/* spacer so last content never kisses the bottom nav */}
+        <div className="h-4" />
       </main>
 
-      {/* Bottom Nav (sticky INSIDE container) */}
-      <nav className="sticky bottom-0 z-50 bg-card border-t border-border pb-[env(safe-area-inset-bottom)]">
+      {/* Bottom Nav (anchored) */}
+      <nav className="shrink-0 bg-card border-t border-border pb-[env(safe-area-inset-bottom)]">
         <div className="px-2">
           <div className="h-[64px] flex items-center justify-between">
             {tabs.map((tab) => {
