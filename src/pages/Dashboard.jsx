@@ -5,7 +5,7 @@ import { Plus, AlertCircle } from "lucide-react";
 import Layout from "@/components/Layout";
 import VehicleCard from "@/components/VehicleCard";
 import VehicleForm from "@/components/VehicleForm";
-import OnboardingTour from "@/components/OnboardingTour";
+// import OnboardingTour from "@/components/OnboardingTour";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useVehicles } from "@/hooks/useVehicles";
@@ -52,7 +52,7 @@ export default function Dashboard() {
         />
       </Helmet>
 
-      <OnboardingTour />
+      {/* <OnboardingTour /> */}
 
       <div className="space-y-4">
         {/* Header (more compact) */}
