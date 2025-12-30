@@ -1,27 +1,16 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Helmet } from 'react-helmet';
-import { Upload, File, Trash2, Download } from 'lucide-react';
-import Layout from '@/components/Layout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { useDocuments } from '@/hooks/useDocuments';
-import { useVehicles } from '@/hooks/useVehicles';
-import { useToast } from '@/components/ui/use-toast';
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { Helmet } from "react-helmet";
+import { Upload, File, Trash2, Download } from "lucide-react";
+import Layout from "@/components/Layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useDocuments } from "@/hooks/useDocuments";
+import { useVehicles } from "@/hooks/useVehicles";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function DocumentVault() {
   const { documents, addDocument, deleteDocument } = useDocuments();
@@ -29,20 +18,20 @@ export default function DocumentVault() {
   const { toast } = useToast();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
-    vehicleId: '',
-    name: '',
-    type: 'insurance'
+    vehicleId: "",
+    name: "",
+    type: "insurance",
   });
 
   const handleUpload = (e) => {
     e.preventDefault();
-    
+
     const file = e.target.file.files[0];
     if (!file) {
       toast({
-        title: 'No file selected',
-        description: 'Please select a file to upload.',
-        variant: 'destructive'
+        title: "No file selected",
+        description: "Please select a file to upload.",
+        variant: "destructive",
       });
       return;
     }
@@ -50,44 +39,47 @@ export default function DocumentVault() {
     addDocument({
       ...formData,
       size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-      url: '#'
+      url: "#",
     });
 
     toast({
-      title: 'Document Uploaded',
-      description: 'Your document has been saved to the vault.',
+      title: "Document Uploaded",
+      description: "Your document has been saved to the vault.",
     });
 
     setUploadDialogOpen(false);
-    setFormData({ vehicleId: '', name: '', type: 'insurance' });
+    setFormData({ vehicleId: "", name: "", type: "insurance" });
   };
 
   const handleDelete = (id) => {
     deleteDocument(id);
     toast({
-      title: 'Document Deleted',
-      description: 'Document has been removed from the vault.',
+      title: "Document Deleted",
+      description: "Document has been removed from the vault.",
     });
   };
 
   const getVehicleName = (vehicleId) => {
-    const vehicle = vehicles.find(v => v.id === vehicleId);
-    return vehicle ? vehicle.nickname : 'Unknown Vehicle';
+    const vehicle = vehicles.find((v) => v.id === vehicleId);
+    return vehicle ? vehicle.nickname : "Unknown Vehicle";
   };
 
   const documentTypes = {
-    insurance: 'Insurance',
-    mot: 'MOT Certificate',
-    service: 'Service Record',
-    tax: 'Tax Document',
-    other: 'Other'
+    insurance: "Insurance",
+    mot: "MOT Certificate",
+    service: "Service Record",
+    tax: "Tax Document",
+    other: "Other",
   };
 
   return (
     <Layout>
       <Helmet>
         <title>Document Vault - Vehicle Guardian</title>
-        <meta name="description" content="Securely store and manage all your vehicle documents in one place. Upload insurance certificates, MOT documents, and service records." />
+        <meta
+          name="description"
+          content="Securely store and manage all your vehicle documents in one place. Upload insurance certificates, MOT documents, and service records."
+        />
       </Helmet>
 
       <div className="space-y-6">
@@ -96,11 +88,9 @@ export default function DocumentVault() {
             <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               Document Vault
             </h1>
-            <p className="text-muted-foreground">
-              Securely store all your vehicle documents
-            </p>
+            <p className="text-muted-foreground">Securely store all your vehicle documents</p>
           </div>
-          
+
           <Button
             onClick={() => setUploadDialogOpen(true)}
             className="bg-gradient-to-r from-primary to-secondary"
@@ -111,18 +101,12 @@ export default function DocumentVault() {
         </div>
 
         {documents.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-12"
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
             <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mx-auto mb-4">
               <File className="h-12 w-12 text-muted-foreground" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No documents yet</h3>
-            <p className="text-muted-foreground mb-6">
-              Upload your first document to get started
-            </p>
+            <p className="text-muted-foreground mb-6">Upload your first document to get started</p>
             <Button
               onClick={() => setUploadDialogOpen(true)}
               className="bg-gradient-to-r from-primary to-secondary"
@@ -132,13 +116,14 @@ export default function DocumentVault() {
             </Button>
           </motion.div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          // ✅ PHONE-FRAME FRIENDLY: always single column
+          <div className="grid grid-cols-1 gap-4">
             {documents.map((doc, index) => (
               <motion.div
                 key={doc.id}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
+                transition={{ delay: index * 0.06 }}
                 className="bg-card border border-border rounded-xl p-6 hover:border-primary/50 transition-colors"
               >
                 <div className="flex items-start justify-between mb-4">
@@ -149,10 +134,12 @@ export default function DocumentVault() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => toast({
-                        title: '🚧 Feature Coming Soon',
-                        description: 'Document download will be available soon!',
-                      })}
+                      onClick={() =>
+                        toast({
+                          title: "🚧 Feature Coming Soon",
+                          description: "Document download will be available soon!",
+                        })
+                      }
                     >
                       <Download className="h-4 w-4" />
                     </Button>
@@ -168,16 +155,14 @@ export default function DocumentVault() {
                 </div>
 
                 <h3 className="font-semibold mb-1">{doc.name}</h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  {getVehicleName(doc.vehicleId)}
-                </p>
+                <p className="text-sm text-muted-foreground mb-3">{getVehicleName(doc.vehicleId)}</p>
 
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>{documentTypes[doc.type]}</span>
                   <span>{doc.size}</span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Uploaded: {new Date(doc.uploadDate).toLocaleDateString('en-GB')}
+                  Uploaded: {new Date(doc.uploadDate).toLocaleDateString("en-GB")}
                 </div>
               </motion.div>
             ))}
@@ -186,11 +171,11 @@ export default function DocumentVault() {
       </div>
 
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[420px]">
           <DialogHeader>
             <DialogTitle>Upload Document</DialogTitle>
           </DialogHeader>
-          
+
           <form onSubmit={handleUpload} className="space-y-4">
             <div>
               <Label htmlFor="vehicleId">Vehicle</Label>
@@ -203,7 +188,7 @@ export default function DocumentVault() {
                   <SelectValue placeholder="Select vehicle" />
                 </SelectTrigger>
                 <SelectContent>
-                  {vehicles.map(vehicle => (
+                  {vehicles.map((vehicle) => (
                     <SelectItem key={vehicle.id} value={vehicle.id}>
                       {vehicle.nickname}
                     </SelectItem>
@@ -225,10 +210,7 @@ export default function DocumentVault() {
 
             <div>
               <Label htmlFor="type">Document Type</Label>
-              <Select
-                value={formData.type}
-                onValueChange={(value) => setFormData({ ...formData, type: value })}
-              >
+              <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -244,19 +226,10 @@ export default function DocumentVault() {
 
             <div>
               <Label htmlFor="file">File</Label>
-              <Input
-                id="file"
-                name="file"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                required
-              />
+              <Input id="file" name="file" type="file" accept=".pdf,.jpg,.jpeg,.png" required />
             </div>
 
-            <Button
-              type="submit"
-              className="w-full bg-gradient-to-r from-primary to-secondary"
-            >
+            <Button type="submit" className="w-full bg-gradient-to-r from-primary to-secondary">
               Upload Document
             </Button>
           </form>

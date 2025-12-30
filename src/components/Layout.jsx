@@ -38,25 +38,27 @@ export default function Layout({ children }) {
     navigate("/login");
   };
 
-  const getInitials = (name) => {
-    return name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "U";
-  };
+  const getInitials = (name) =>
+    name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "U";
 
   const isActive = (path) => {
-    // Exact match OR nested routes (e.g. /vehicle/:id should still highlight Dashboard)
     if (path === "/dashboard") {
       return (
         location.pathname === "/dashboard" ||
         location.pathname.startsWith("/vehicle/")
       );
     }
-    return location.pathname === path || location.pathname.startsWith(path + "/");
+    return (
+      location.pathname === path || location.pathname.startsWith(path + "/")
+    );
   };
 
   return (
-    <div className="min-h-dvh bg-background text-foreground">
-      {/* Top Bar */}
-      <header className="fixed top-0 left-0 right-0 h-14 bg-card border-b border-border z-50 flex items-center px-4">
+    // IMPORTANT: no fixed positioning in this file
+    // This Layout is meant to live INSIDE your phone frame
+    <div className="h-full min-h-dvh bg-background text-foreground flex flex-col">
+      {/* Top Bar (sticky INSIDE container) */}
+      <header className="sticky top-0 z-50 h-14 bg-card border-b border-border flex items-center px-4">
         <Link to="/dashboard" className="flex items-center gap-2">
           <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
             <Car className="h-5 w-5 text-white" />
@@ -92,14 +94,14 @@ export default function Layout({ children }) {
         </div>
       </header>
 
-      {/* Content (scrollable) */}
-      <main className="pt-14 pb-[76px] min-h-dvh">
-        <div className="p-4">{children}</div>
+      {/* Content (scrolls inside phone frame) */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-4 pb-24">{children}</div>
       </main>
 
-      {/* Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border pb-[env(safe-area-inset-bottom)]">
-        <div className="mx-auto max-w-[430px] px-2">
+      {/* Bottom Nav (sticky INSIDE container) */}
+      <nav className="sticky bottom-0 z-50 bg-card border-t border-border pb-[env(safe-area-inset-bottom)]">
+        <div className="px-2">
           <div className="h-[64px] flex items-center justify-between">
             {tabs.map((tab) => {
               const Icon = tab.icon;

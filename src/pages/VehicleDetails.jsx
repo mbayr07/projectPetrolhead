@@ -1,12 +1,21 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Helmet } from 'react-helmet';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Calendar, Gauge, Droplet, Palette, FileText } from 'lucide-react';
-import Layout from '@/components/Layout';
-import VehicleForm from '@/components/VehicleForm';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { Helmet } from "react-helmet";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft,
+  Edit,
+  Trash2,
+  Calendar,
+  Gauge,
+  Droplet,
+  Palette,
+  FileText,
+} from "lucide-react";
+import Layout from "@/components/Layout";
+import VehicleForm from "@/components/VehicleForm";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,9 +25,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { useVehicles } from '@/hooks/useVehicles';
-import { useToast } from '@/components/ui/use-toast';
+} from "@/components/ui/alert-dialog";
+import { useVehicles } from "@/hooks/useVehicles";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function VehicleDetails() {
   const { id } = useParams();
@@ -28,14 +37,14 @@ export default function VehicleDetails() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const vehicle = vehicles.find(v => String(v.id) === String(id));
+  const vehicle = vehicles.find((v) => String(v.id) === String(id));
 
   if (!vehicle) {
     return (
       <Layout>
         <div className="text-center py-12">
           <h2 className="text-2xl font-bold mb-2">Vehicle not found</h2>
-          <Button onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
+          <Button onClick={() => navigate("/dashboard")}>Back to Dashboard</Button>
         </div>
       </Layout>
     );
@@ -56,25 +65,25 @@ export default function VehicleDetails() {
 
   const formatFull = (dateStr) => {
     const d = parseDate(dateStr);
-    if (!d) return 'No data held';
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+    if (!d) return "No data held";
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
   };
 
   const expiryItems = [
-    { label: 'MOT', date: vehicle.motExpiry, applicable: true },
-    { label: 'Tax', date: vehicle.taxExpiry, applicable: !vehicle.isSorn },
-    { label: 'Insurance', date: vehicle.insuranceExpiry, applicable: !vehicle.isUninsured },
-    { label: 'Last Service', date: vehicle.serviceDate, applicable: true },
-  ].filter(i => i.applicable);
+    { label: "MOT", date: vehicle.motExpiry, applicable: true },
+    { label: "Tax", date: vehicle.taxExpiry, applicable: !vehicle.isSorn },
+    { label: "Insurance", date: vehicle.insuranceExpiry, applicable: !vehicle.isUninsured },
+    { label: "Last Service", date: vehicle.serviceDate, applicable: true },
+  ].filter((i) => i.applicable);
 
   const handleDelete = () => {
     deleteVehicle(id);
-    toast({ title: 'Vehicle Deleted', description: 'Vehicle has been removed from your fleet.' });
-    navigate('/dashboard');
+    toast({ title: "Vehicle Deleted", description: "Vehicle has been removed from your fleet." });
+    navigate("/dashboard");
   };
 
   // Robust display helpers
-  const safeText = (v, fallback = 'No data held') => {
+  const safeText = (v, fallback = "No data held") => {
     if (v === null || v === undefined) return fallback;
     const s = String(v).trim();
     return s.length ? s : fallback;
@@ -82,8 +91,8 @@ export default function VehicleDetails() {
 
   const safeMileage = () => {
     const m = vehicle.mileage;
-    if (m === null || m === undefined || String(m).trim() === '') return 'No data held';
-    const n = Number(String(m).replace(/,/g, ''));
+    if (m === null || m === undefined || String(m).trim() === "") return "No data held";
+    const n = Number(String(m).replace(/,/g, ""));
     if (Number.isNaN(n)) return safeText(m);
     return `${n.toLocaleString()} miles`;
   };
@@ -91,19 +100,24 @@ export default function VehicleDetails() {
   return (
     <Layout>
       <Helmet>
-        <title>{safeText(vehicle.nickname, 'Vehicle')} - Vehicle Guardian</title>
+        <title>{safeText(vehicle.nickname, "Vehicle")} - Vehicle Guardian</title>
       </Helmet>
 
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10"
+            onClick={() => navigate("/dashboard")}
+          >
             <ArrowLeft className="h-5 w-5" />
           </Button>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                {safeText(vehicle.nickname, 'Vehicle')}
+                {safeText(vehicle.nickname, "Vehicle")}
               </h1>
 
               {vehicle.isSorn && (
@@ -119,7 +133,9 @@ export default function VehicleDetails() {
               )}
             </div>
 
-            <p className="text-muted-foreground">{safeText(vehicle.registrationNumber, '')}</p>
+            <p className="text-muted-foreground break-all">
+              {safeText(vehicle.registrationNumber, "")}
+            </p>
           </div>
 
           <div className="flex gap-2">
@@ -147,18 +163,26 @@ export default function VehicleDetails() {
             <h2 className="text-xl font-bold mb-4">Vehicle Information</h2>
 
             <div className="space-y-3">
-              <InfoRow icon={FileText} label="Make & Model" value={safeText(`${vehicle.make || ''} ${vehicle.model || ''}`.trim())} />
+              <InfoRow
+                icon={FileText}
+                label="Make & Model"
+                value={safeText(`${vehicle.make || ""} ${vehicle.model || ""}`.trim())}
+              />
               <InfoRow icon={Calendar} label="Year" value={safeText(vehicle.year)} />
               <InfoRow icon={Palette} label="Color" value={safeText(vehicle.color)} />
               <InfoRow icon={Droplet} label="Fuel Type" value={safeText(vehicle.fuelType)} />
               <InfoRow icon={Gauge} label="Mileage" value={safeMileage()} />
 
-              {!vehicle.isUninsured && vehicle.insurancePolicyNumber && String(vehicle.insurancePolicyNumber).trim() && (
-                <div className="rounded-lg border border-border bg-muted/30 p-4">
-                  <div className="text-sm text-muted-foreground">Insurance Policy Number</div>
-                  <div className="font-semibold break-all">{String(vehicle.insurancePolicyNumber)}</div>
-                </div>
-              )}
+              {!vehicle.isUninsured &&
+                vehicle.insurancePolicyNumber &&
+                String(vehicle.insurancePolicyNumber).trim() && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-4">
+                    <div className="text-sm text-muted-foreground">Insurance Policy Number</div>
+                    <div className="font-semibold break-all">
+                      {String(vehicle.insurancePolicyNumber)}
+                    </div>
+                  </div>
+                )}
             </div>
           </motion.div>
 
@@ -178,22 +202,22 @@ export default function VehicleDetails() {
                 const isWarning = hasDate && du >= 0 && du < 30;
 
                 const boxClass = !hasDate
-                  ? 'bg-muted/30 border-border'
+                  ? "bg-muted/30 border-border"
                   : isExpired
-                  ? 'bg-red-500/10 border-red-500/50'
+                  ? "bg-red-500/10 border-red-500/50"
                   : isWarning
-                  ? 'bg-yellow-500/10 border-yellow-500/50'
-                  : 'bg-green-500/10 border-green-500/50';
+                  ? "bg-yellow-500/10 border-yellow-500/50"
+                  : "bg-green-500/10 border-green-500/50";
 
-                const rightText = !hasDate ? 'No data' : (isExpired ? 'Expired' : `${du} days`);
+                const rightText = !hasDate ? "No data" : isExpired ? "Expired" : `${du} days`;
 
                 const rightColor = !hasDate
-                  ? 'text-muted-foreground'
+                  ? "text-muted-foreground"
                   : isExpired
-                  ? 'text-red-500'
+                  ? "text-red-500"
                   : isWarning
-                  ? 'text-yellow-500'
-                  : 'text-green-500';
+                  ? "text-yellow-500"
+                  : "text-green-500";
 
                 return (
                   <div key={item.label} className={`p-4 rounded-lg border ${boxClass}`}>
@@ -207,7 +231,9 @@ export default function VehicleDetails() {
                           </div>
                         )}
                       </div>
-                      <div className={`text-sm font-semibold whitespace-nowrap ${rightColor}`}>{rightText}</div>
+                      <div className={`text-sm font-semibold whitespace-nowrap ${rightColor}`}>
+                        {rightText}
+                      </div>
                     </div>
                   </div>
                 );
@@ -235,7 +261,8 @@ export default function VehicleDetails() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Vehicle?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete {safeText(vehicle.nickname, 'this vehicle')} and all associated data. This action cannot be undone.
+              This will permanently delete {safeText(vehicle.nickname, "this vehicle")} and all
+              associated data. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -258,7 +285,7 @@ function InfoRow({ icon: Icon, label, value }) {
       </div>
       <div className="min-w-0">
         <div className="text-sm text-muted-foreground">{label}</div>
-        <div className="font-semibold break-words">{String(value ?? '')}</div>
+        <div className="font-semibold break-words">{String(value ?? "")}</div>
       </div>
     </div>
   );

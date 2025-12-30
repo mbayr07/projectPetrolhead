@@ -63,9 +63,24 @@ export default function App() {
 
         <ScrollToTop />
 
-        {/* Phone frame wrapper */}
-        <div className="min-h-dvh w-full bg-neutral-900 flex justify-center items-start sm:items-center">
-          <div className="w-full max-w-[430px] min-h-dvh bg-background text-foreground shadow-2xl sm:rounded-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]">
+        {/* Desktop: centred phone frame. Mobile: full width. */}
+        <div className="min-h-dvh w-full bg-neutral-900 flex justify-center items-start sm:items-center p-4">
+          <div
+            className="
+              w-full max-w-[430px]
+              bg-background text-foreground
+              shadow-2xl
+              overflow-hidden
+              pb-[env(safe-area-inset-bottom)]
+              sm:rounded-2xl
+              sm:h-[calc(100dvh-2rem)]
+              sm:max-h-[calc(100dvh-2rem)]
+              lg:scale-[1.05]
+              xl:scale-[1.1]
+              origin-top
+            "
+          >
+            {/* IMPORTANT: Layout now handles internal scrolling (header/nav sticky inside) */}
             <Routes>
               <Route
                 path="/login"
