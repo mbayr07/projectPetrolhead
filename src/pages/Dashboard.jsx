@@ -18,24 +18,23 @@ export default function Dashboard() {
     const now = new Date();
     let alerts = 0;
 
+    const daysDiff = (date) => Math.floor((date - now) / (1000 * 60 * 60 * 24));
+
     vehicles.forEach((vehicle) => {
-      const toDate = (d) => (d ? new Date(d) : null);
-      const daysDiff = (date) => {
-        if (!date || Number.isNaN(date.getTime())) return null;
-        return Math.floor((date - now) / (1000 * 60 * 60 * 24));
-      };
+      const motDate = vehicle.motExpiry ? new Date(vehicle.motExpiry) : null;
+      const taxDate = vehicle.taxExpiry ? new Date(vehicle.taxExpiry) : null;
+      const insuranceDate = vehicle.insuranceExpiry ? new Date(vehicle.insuranceExpiry) : null;
 
-      const motDays = daysDiff(toDate(vehicle.motExpiry));
-      const taxDays = vehicle.isSorn ? null : daysDiff(toDate(vehicle.taxExpiry));
-      const insDays = vehicle.isUninsured ? null : daysDiff(toDate(vehicle.insuranceExpiry));
+      const motDays = motDate ? daysDiff(motDate) : null;
+      const taxDays = vehicle.isSorn ? null : taxDate ? daysDiff(taxDate) : null;
+      const insDays = vehicle.isUninsured ? null : insuranceDate ? daysDiff(insuranceDate) : null;
 
-      if (
+      const warn =
         (motDays !== null && motDays < 30) ||
         (taxDays !== null && taxDays < 30) ||
-        (insDays !== null && insDays < 30)
-      ) {
-        alerts++;
-      }
+        (insDays !== null && insDays < 30);
+
+      if (warn) alerts++;
     });
 
     return alerts;
@@ -55,62 +54,69 @@ export default function Dashboard() {
 
       <OnboardingTour />
 
-      <div className="space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+      <div className="space-y-4">
+        {/* Header (more compact) */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold leading-tight bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               My Vehicles
             </h1>
-            <p className="text-muted-foreground">Manage your fleet and stay on top of maintenance</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Stay on top of MOT, tax, insurance & service.
+            </p>
           </div>
 
           <Button
             onClick={() => setAddDialogOpen(true)}
-            className="bg-gradient-to-r from-primary to-secondary"
+            className="bg-gradient-to-r from-primary to-secondary h-9 px-3 text-sm shrink-0"
           >
             <Plus className="h-4 w-4 mr-2" />
-            Add Vehicle
+            Add
           </Button>
         </div>
 
+        {/* Alert banner (slimmer) */}
         {activeAlerts > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-yellow-500/10 border border-yellow-500/50 rounded-xl p-4 flex items-center gap-3"
+            className="bg-yellow-500/10 border border-yellow-500/35 rounded-xl px-3 py-2 flex items-center gap-2"
           >
-            <AlertCircle className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+            <AlertCircle className="h-4 w-4 text-yellow-500 flex-shrink-0" />
             <p className="text-sm">
-              <span className="font-bold text-yellow-500">{activeAlerts}</span> vehicle
-              {activeAlerts > 1 ? "s have" : " has"} upcoming expiry dates within 30 days
+              <span className="font-semibold text-yellow-500">{activeAlerts}</span>{" "}
+              vehicle{activeAlerts > 1 ? "s" : ""} with an expiry within{" "}
+              <span className="font-semibold">30 days</span>.
             </p>
           </motion.div>
         )}
 
+        {/* Empty state (more compact) */}
         {vehicles.length === 0 ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
-            <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mx-auto mb-4">
-              <Plus className="h-12 w-12 text-muted-foreground" />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-10">
+            <div className="h-20 w-20 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mx-auto mb-3">
+              <Plus className="h-10 w-10 text-muted-foreground" />
             </div>
-            <h3 className="text-xl font-semibold mb-2">No vehicles yet</h3>
-            <p className="text-muted-foreground mb-6">Add your first vehicle to get started</p>
+            <h3 className="text-lg font-semibold mb-1">No vehicles yet</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Add your first vehicle to get started.
+            </p>
             <Button
               onClick={() => setAddDialogOpen(true)}
-              className="bg-gradient-to-r from-primary to-secondary"
+              className="bg-gradient-to-r from-primary to-secondary h-10 px-4"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Add Your First Vehicle
+              Add Vehicle
             </Button>
           </motion.div>
         ) : (
-          // IMPORTANT: keep it single-column for phone-frame UX
-          <div className="grid grid-cols-1 gap-6">
+          <div className="grid grid-cols-1 gap-4">
             {vehicles.map((vehicle, index) => (
               <motion.div
                 key={vehicle.id}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.06 }}
+                transition={{ delay: Math.min(index * 0.06, 0.24) }}
               >
                 <VehicleCard vehicle={vehicle} />
               </motion.div>

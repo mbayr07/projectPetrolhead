@@ -1,90 +1,103 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 const AuthContext = createContext(null);
 
-const fallbackAuth = {
-  user: null,
-  loading: true,
-  signup: () => null,
-  login: () => null,
-  logout: () => {},
-  updateUser: () => {},
-};
+export function useAuth() {
+  return useContext(AuthContext);
+}
 
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  return ctx || fallbackAuth;
-};
-
-const AuthProvider = ({ children }) => {
+export default function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Load session + subscribe to auth changes
   useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('vg_user');
-      if (storedUser) setUser(JSON.parse(storedUser));
-    } catch (e) {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    let mounted = true;
 
-  const signup = (email, password, name) => {
-    const newUser = {
-      id: Date.now().toString(),
-      email,
-      name,
-      createdAt: new Date().toISOString(),
-      hasSeenTour: false,
+    const init = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (!mounted) return;
+
+      if (error) console.warn("getSession error:", error.message);
+
+      setUser(data?.session?.user ?? null);
+      setLoading(false);
     };
 
-    const users = JSON.parse(localStorage.getItem('vg_users') || '[]');
-    users.push({ ...newUser, password });
+    init();
 
-    localStorage.setItem('vg_users', JSON.stringify(users));
-    localStorage.setItem('vg_user', JSON.stringify(newUser));
-    setUser(newUser);
-    return newUser;
-  };
-
-  const login = (email, password) => {
-    const users = JSON.parse(localStorage.getItem('vg_users') || '[]');
-    const foundUser = users.find(u => u.email === email && u.password === password);
-
-    if (foundUser) {
-      const { password: _pw, ...userWithoutPassword } = foundUser;
-      localStorage.setItem('vg_user', JSON.stringify(userWithoutPassword));
-      setUser(userWithoutPassword);
-      return userWithoutPassword;
-    }
-    return null;
-  };
-
-  const logout = () => {
-    localStorage.removeItem('vg_user');
-    setUser(null);
-  };
-
-  const updateUser = (updates) => {
-    setUser(prev => {
-      const next = { ...(prev || {}), ...(updates || {}) };
-      localStorage.setItem('vg_user', JSON.stringify(next));
-      return next;
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
     });
+
+    return () => {
+      mounted = false;
+      sub?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  // Email/password signup
+  const signup = async (email, password, name) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name }, // stored in user_metadata
+      },
+    });
+    if (error) throw error;
+    return data;
+  };
+
+  // Email/password login
+  const login = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) throw error;
+    return data;
+  };
+
+  // Google login
+  const loginWithGoogle = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    if (error) throw error;
+    return data;
+  };
+
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  };
+
+  const updateUser = async (updates) => {
+    const { data, error } = await supabase.auth.updateUser({
+      data: updates, // updates user_metadata
+    });
+    if (error) throw error;
+    return data;
   };
 
   const value = useMemo(
-    () => ({ user, signup, login, logout, updateUser, loading }),
+    () => ({
+      user,
+      loading,
+      signup,
+      login,
+      loginWithGoogle,
+      logout,
+      updateUser,
+    }),
     [user, loading]
   );
 
-  return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
-    </AuthContext.Provider>
-  );
-};
-
-export default AuthProvider;
+  // Keep your previous behaviour: don’t render app until auth known
+  return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
+}
