@@ -5,11 +5,11 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   server: {
-    host: true,
     port: 3000,
+    // IMPORTANT: use IPv4 to avoid localhost/::1 weirdness on some Macs
     proxy: {
       "/api": {
-        target: "http://localhost:5174",
+        target: "http://127.0.0.1:5174",
         changeOrigin: true,
         secure: false,
       },
