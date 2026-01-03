@@ -7,6 +7,14 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+const getRedirectUrl = () => {
+  // Local vs production redirect handling
+  if (import.meta.env.MODE === "development") {
+    return "http://localhost:3000/login";
+  }
+  return "https://www.auto-mate-ai.co.uk/login";
+};
+
 export default function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,15 +45,17 @@ export default function AuthProvider({ children }) {
     };
   }, []);
 
-  // Email/password signup
+  // ✅ Email/password signup (FIXED redirect)
   const signup = async (email, password, name) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { name }, // stored in user_metadata
+        data: { name },
+        emailRedirectTo: getRedirectUrl(),
       },
     });
+
     if (error) throw error;
     return data;
   };
@@ -56,18 +66,20 @@ export default function AuthProvider({ children }) {
       email,
       password,
     });
+
     if (error) throw error;
     return data;
   };
 
-  // Google login
+  // ✅ Google login (FIXED redirect)
   const loginWithGoogle = async () => {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: getRedirectUrl(),
       },
     });
+
     if (error) throw error;
     return data;
   };
@@ -79,7 +91,7 @@ export default function AuthProvider({ children }) {
 
   const updateUser = async (updates) => {
     const { data, error } = await supabase.auth.updateUser({
-      data: updates, // updates user_metadata
+      data: updates,
     });
     if (error) throw error;
     return data;
@@ -98,6 +110,9 @@ export default function AuthProvider({ children }) {
     [user, loading]
   );
 
-  // Keep your previous behaviour: don’t render app until auth known
-  return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
 }
