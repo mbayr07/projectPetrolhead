@@ -1,4 +1,3 @@
-// src/hooks/useVehicles.js
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -16,11 +15,19 @@ const MOCK_DVLA_DATA = {
   },
 };
 
-const TABLE = "vehicles";
-const BUCKET = "vehicle-photos";
-
 function cleanVrm(v) {
   return String(v || "").replace(/\s+/g, "").toUpperCase();
+}
+
+function isRealFile(x) {
+  return (
+    x &&
+    typeof x === "object" &&
+    (x instanceof File ||
+      (typeof x.name === "string" &&
+        typeof x.size === "number" &&
+        typeof x.arrayBuffer === "function"))
+  );
 }
 
 function guessExt(file) {
@@ -29,7 +36,7 @@ function guessExt(file) {
   if (m?.[1]) return m[1];
 
   const mime = String(file?.type || "").toLowerCase();
-  if (mime === "image/png") return "png";
+  if (mime === "image/png" || mime === "image/x-png") return "png";
   if (mime === "image/jpeg" || mime === "image/jpg") return "jpg";
   if (mime === "image/webp") return "webp";
   if (mime === "image/heic" || mime === "image/heif") return "heic";
@@ -46,8 +53,8 @@ function guessContentType(file, ext) {
   return "application/octet-stream";
 }
 
-// INSERT mapping (full object)
-function toDbInsert(vehicle, userId) {
+function toDb(vehicle, userId) {
+  // Accept both camelCase + snake_case
   const photoUrl = vehicle.photoUrl ?? vehicle.photo_url ?? "";
   const photoPath = vehicle.photoPath ?? vehicle.photo_path ?? "";
 
@@ -63,7 +70,9 @@ function toDbInsert(vehicle, userId) {
     color: vehicle.color || "",
     fuel_type: vehicle.fuelType || "",
     mileage:
-      vehicle.mileage === "" || vehicle.mileage === null || vehicle.mileage === undefined
+      vehicle.mileage === "" ||
+      vehicle.mileage === null ||
+      vehicle.mileage === undefined
         ? null
         : Number(vehicle.mileage),
 
@@ -76,52 +85,12 @@ function toDbInsert(vehicle, userId) {
     is_sorn: !!vehicle.isSorn,
     service_date: vehicle.serviceDate || null,
 
+    // ✅ Photos
     photo_url: photoUrl || null,
     photo_path: photoPath || null,
 
     updated_at: new Date().toISOString(),
   };
-}
-
-// UPDATE mapping (PATCH: only fields provided)
-function toDbPatch(updates) {
-  const patch = {};
-
-  const has = (k) => Object.prototype.hasOwnProperty.call(updates, k);
-
-  // allow both camel + snake input
-  if (has("registrationNumber") || has("registration_number")) {
-    patch.registration_number = cleanVrm(updates.registrationNumber ?? updates.registration_number) || "";
-  }
-  if (has("nickname")) patch.nickname = updates.nickname ?? "";
-
-  if (has("make")) patch.make = updates.make ?? "";
-  if (has("model")) patch.model = updates.model ?? "";
-  if (has("year")) patch.year = updates.year === "" || updates.year === null || updates.year === undefined ? null : Number(updates.year);
-  if (has("color")) patch.color = updates.color ?? "";
-  if (has("fuelType") || has("fuel_type")) patch.fuel_type = updates.fuelType ?? updates.fuel_type ?? "";
-  if (has("mileage")) {
-    patch.mileage =
-      updates.mileage === "" || updates.mileage === null || updates.mileage === undefined
-        ? null
-        : Number(updates.mileage);
-  }
-
-  if (has("motExpiry") || has("mot_expiry")) patch.mot_expiry = updates.motExpiry ?? updates.mot_expiry ?? null;
-  if (has("taxExpiry") || has("tax_expiry")) patch.tax_expiry = updates.taxExpiry ?? updates.tax_expiry ?? null;
-  if (has("insuranceExpiry") || has("insurance_expiry")) patch.insurance_expiry = updates.insuranceExpiry ?? updates.insurance_expiry ?? null;
-  if (has("insurancePolicyNumber") || has("insurance_policy_number"))
-    patch.insurance_policy_number = updates.insurancePolicyNumber ?? updates.insurance_policy_number ?? null;
-
-  if (has("isUninsured") || has("is_uninsured")) patch.is_uninsured = !!(updates.isUninsured ?? updates.is_uninsured);
-  if (has("isSorn") || has("is_sorn")) patch.is_sorn = !!(updates.isSorn ?? updates.is_sorn);
-  if (has("serviceDate") || has("service_date")) patch.service_date = updates.serviceDate ?? updates.service_date ?? null;
-
-  if (has("photoUrl") || has("photo_url")) patch.photo_url = updates.photoUrl ?? updates.photo_url ?? null;
-  if (has("photoPath") || has("photo_path")) patch.photo_path = updates.photoPath ?? updates.photo_path ?? null;
-
-  patch.updated_at = new Date().toISOString();
-  return patch;
 }
 
 function fromDb(row) {
@@ -146,6 +115,7 @@ function fromDb(row) {
     isSorn: !!row.is_sorn,
     serviceDate: row.service_date || "",
 
+    // ✅ Photos
     photoUrl: row.photo_url || "",
     photoPath: row.photo_path || "",
 
@@ -157,6 +127,9 @@ export function useVehicles() {
   const { user } = useAuth();
   const [vehicles, setVehicles] = useState([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
+
+  const TABLE = "vehicles";
+  const BUCKET = "vehicle-photos";
 
   const refresh = useCallback(async () => {
     if (!user?.id) return;
@@ -189,9 +162,14 @@ export function useVehicles() {
     async (vehicleData) => {
       if (!user?.id) throw new Error("Not logged in.");
 
-      const payload = toDbInsert(vehicleData, user.id);
+      const payload = toDb(vehicleData, user.id);
 
-      const { data, error } = await supabase.from(TABLE).insert(payload).select("*").single();
+      const { data, error } = await supabase
+        .from(TABLE)
+        .insert(payload)
+        .select("*")
+        .single();
+
       if (error) throw error;
 
       const created = fromDb(data);
@@ -205,11 +183,12 @@ export function useVehicles() {
     async (id, updates) => {
       if (!user?.id) throw new Error("Not logged in.");
 
-      const patch = toDbPatch(updates);
+      const payload = toDb(updates, user.id);
+      delete payload.user_id;
 
       const { data, error } = await supabase
         .from(TABLE)
-        .update(patch)
+        .update(payload)
         .eq("id", id)
         .eq("user_id", user.id)
         .select("*")
@@ -218,7 +197,9 @@ export function useVehicles() {
       if (error) throw error;
 
       const updated = fromDb(data);
-      setVehicles((prev) => prev.map((v) => (String(v.id) === String(id) ? updated : v)));
+      setVehicles((prev) =>
+        prev.map((v) => (String(v.id) === String(id) ? updated : v))
+      );
       return updated;
     },
     [user?.id]
@@ -233,7 +214,12 @@ export function useVehicles() {
         await supabase.storage.from(BUCKET).remove([existing.photoPath]);
       }
 
-      const { error } = await supabase.from(TABLE).delete().eq("id", id).eq("user_id", user.id);
+      const { error } = await supabase
+        .from(TABLE)
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
       if (error) throw error;
 
       setVehicles((prev) => prev.filter((v) => String(v.id) !== String(id)));
@@ -254,28 +240,56 @@ export function useVehicles() {
     }
   }, []);
 
-  // ✅ Signature matches your VehicleForm: uploadVehiclePhoto(vehicleId, file)
+  /**
+   * ✅ uploadVehiclePhoto supports BOTH calling styles:
+   *   1) uploadVehiclePhoto(file, registrationNumber)  <-- your VehicleForm
+   *   2) uploadVehiclePhoto(vehicleId, file)           <-- other code
+   */
   const uploadVehiclePhoto = useCallback(
-    async (vehicleId, file) => {
+    async (a, b) => {
       if (!user?.id) throw new Error("Not logged in.");
-      if (!vehicleId) throw new Error("vehicleId is required.");
-      if (!file) throw new Error("No file provided.");
+
+      // Detect which arg is the File
+      const file = isRealFile(a) ? a : isRealFile(b) ? b : null;
+      const other = file === a ? b : a;
+
+      if (!file) {
+        throw new Error(
+          `Please upload a JPG, PNG, or WEBP image. (Got: name="${a?.name}", type="${a?.type}")`
+        );
+      }
+
+      // If "other" is a string => treat as VRM, else treat as vehicleId
+      const vrm = typeof other === "string" ? cleanVrm(other) : null;
+      const vehicleId = typeof other === "string" ? null : other;
 
       const mime = String(file.type || "").toLowerCase();
       const extRaw = guessExt(file);
-      const ext = extRaw === "jpeg" ? "jpg" : extRaw;
+      const extNorm = extRaw === "jpeg" ? "jpg" : extRaw;
 
-      const looksImage = mime.startsWith("image/") || ["png", "jpg", "jpeg", "webp"].includes(ext);
-      if (!looksImage) {
-        throw new Error(`Please upload a JPG, PNG, or WEBP image. (Got: name="${file?.name}", type="${file?.type}")`);
-      }
-      if (mime.includes("heic") || mime.includes("heif") || ext === "heic" || ext === "heif") {
+      // Block HEIC/HEIF explicitly
+      if (mime.includes("heic") || mime.includes("heif") || extNorm === "heic" || extNorm === "heif") {
         throw new Error("HEIC/HEIF isn’t supported yet. Please export as JPG or PNG.");
       }
 
+      // Accept if mime is image/* OR extension looks like image
+      const looksImage =
+        mime.startsWith("image/") || ["png", "jpg", "jpeg", "webp"].includes(extNorm);
+
+      if (!looksImage) {
+        throw new Error(
+          `Please upload a JPG, PNG, or WEBP image. (Got: name="${file?.name}", type="${file?.type}")`
+        );
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("Max 5MB image size.");
+      }
+
+      // Decide final extension
       const allowedExt = new Set(["png", "jpg", "webp"]);
-      const finalExt = allowedExt.has(ext)
-        ? ext
+      const finalExt = allowedExt.has(extNorm)
+        ? extNorm
         : mime.includes("png")
         ? "png"
         : mime.includes("webp")
@@ -284,7 +298,12 @@ export function useVehicles() {
 
       const contentType = guessContentType(file, finalExt);
 
-      const path = `${user.id}/${vehicleId}/${Date.now()}.${finalExt}`;
+      // Path strategy:
+      // - If we have a vehicleId: userId/vehicleId/timestamp.ext
+      // - Else fallback to VRM: userId/VRM.ext (upsert=true)
+      const path = vehicleId
+        ? `${user.id}/${vehicleId}/${Date.now()}.${finalExt}`
+        : `${user.id}/${(vrm || "VEHICLE")}.${finalExt}`;
 
       const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
         upsert: true,
@@ -310,6 +329,8 @@ export function useVehicles() {
     updateVehicle,
     deleteVehicle,
     lookupDVLA,
+
+    // ✅ photos
     uploadVehiclePhoto,
   };
 }
