@@ -40,12 +40,6 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData?.id]);
 
-  const normalizePlate = (s) =>
-    String(s || "")
-      .trim()
-      .replace(/\s+/g, "")
-      .toUpperCase();
-
   const handleDVLALookup = async () => {
     if (!formData.registrationNumber) {
       toast({
@@ -82,11 +76,9 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
         color: dvla.colour ?? dvla.color ?? prev.color,
         fuelType: dvla.fuelType ?? prev.fuelType,
 
-        // dates (only overwrite if present)
-        motExpiry: dvla.motExpiryDate ?? dvla.motExpiry ?? prev.motExpiry,
-        taxExpiry: isSornFromDVLA
-          ? ""
-          : (dvla.taxDueDate ?? dvla.taxExpiry ?? prev.taxExpiry),
+        // dates (standardise on motExpiryDate + taxDueDate)
+        motExpiry: dvla.motExpiryDate ?? prev.motExpiry,
+        taxExpiry: isSornFromDVLA ? "" : (dvla.taxDueDate ?? prev.taxExpiry),
 
         // flags
         isSorn: isSornFromDVLA ? true : prev.isSorn,
@@ -94,13 +86,14 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
 
       toast({
         title: "Vehicle Found!",
-        description: "DVLA data loaded successfully.",
+        description: dvla.motExpiryEstimated
+          ? "DVLA data loaded (MOT date is estimated for new vehicles)."
+          : "DVLA data loaded successfully.",
       });
     } catch (err) {
-      console.error(err);
       toast({
         title: "Lookup failed",
-        description: "Could not fetch DVLA data. Is the API working?",
+        description: "Could not fetch DVLA data. Is the server running?",
         variant: "destructive",
       });
     } finally {
@@ -108,34 +101,27 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
     }
   };
 
-  // ✅ IMPORTANT: async + await + loading state
+  // ✅ IMPORTANT: async + await so Supabase writes before closing
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // avoid double submits
-    if (loading) return;
-
     const payload = {
       ...formData,
-
-      // normalize plate
-      registrationNumber: normalizePlate(formData.registrationNumber),
 
       // enforce flags
       isSorn: !!formData.isSorn,
       isUninsured: !!formData.isUninsured,
 
-      // keep blanks as "" (Supabase hook converts blanks -> null)
+      // keep blanks as "" (the new Supabase useVehicles hook converts blanks -> null)
       motExpiry: formData.motExpiry || "",
-      taxExpiry: formData.isSorn ? "" : (formData.taxExpiry || ""),
-      insuranceExpiry: formData.isUninsured ? "" : (formData.insuranceExpiry || ""),
+      taxExpiry: formData.isSorn ? "" : formData.taxExpiry || "",
+      insuranceExpiry: formData.isUninsured ? "" : formData.insuranceExpiry || "",
       insurancePolicyNumber: formData.isUninsured
         ? ""
-        : (formData.insurancePolicyNumber || ""),
+        : formData.insurancePolicyNumber || "",
       serviceDate: formData.serviceDate || "",
     };
 
-    setLoading(true);
     try {
       if (initialData) {
         await updateVehicle(initialData.id, payload);
@@ -153,14 +139,11 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
 
       onSuccess?.();
     } catch (err) {
-      console.error("Save failed:", err);
       toast({
         title: "Save failed",
         description: String(err?.message || err),
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -201,7 +184,6 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
               required
             />
           </div>
-
           <div className="flex items-end">
             <Button
               type="button"
@@ -212,11 +194,9 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <>
-                  <Search className="h-4 w-4 mr-2" />
-                  DVLA Lookup
-                </>
+                <Search className="h-4 w-4 mr-2" />
               )}
+              DVLA Lookup
             </Button>
           </div>
         </div>
@@ -274,19 +254,59 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <InputField label="Make" name="make" value={formData.make} onChange={handleChange} required />
-          <InputField label="Model" name="model" value={formData.model} onChange={handleChange} required />
+          <InputField
+            label="Make"
+            name="make"
+            value={formData.make}
+            onChange={handleChange}
+            required
+          />
+          <InputField
+            label="Model"
+            name="model"
+            value={formData.model}
+            onChange={handleChange}
+            required
+          />
         </div>
 
         <div className="grid grid-cols-3 gap-4">
-          <InputField label="Year" name="year" type="number" value={formData.year} onChange={handleChange} required />
-          <InputField label="Color" name="color" value={formData.color} onChange={handleChange} />
-          <InputField label="Fuel Type" name="fuelType" value={formData.fuelType} onChange={handleChange} />
+          <InputField
+            label="Year"
+            name="year"
+            type="number"
+            value={formData.year}
+            onChange={handleChange}
+            required
+          />
+          <InputField
+            label="Color"
+            name="color"
+            value={formData.color}
+            onChange={handleChange}
+          />
+          <InputField
+            label="Fuel Type"
+            name="fuelType"
+            value={formData.fuelType}
+            onChange={handleChange}
+          />
         </div>
 
-        <InputField label="Mileage" name="mileage" type="number" value={formData.mileage} onChange={handleChange} />
+        <InputField
+          label="Mileage"
+          name="mileage"
+          type="number"
+          value={formData.mileage}
+          onChange={handleChange}
+        />
 
-        <DateField label="MOT Expiry" name="motExpiry" value={formData.motExpiry} onChange={handleChange} />
+        <DateField
+          label="MOT Expiry"
+          name="motExpiry"
+          value={formData.motExpiry}
+          onChange={handleChange}
+        />
 
         <DateField
           label="Tax Expiry"
@@ -314,15 +334,16 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
           disabled={!!formData.isUninsured}
         />
 
-        <DateField label="Last Service" name="serviceDate" value={formData.serviceDate} onChange={handleChange} />
+        <DateField
+          label="Last Service"
+          name="serviceDate"
+          value={formData.serviceDate}
+          onChange={handleChange}
+        />
       </div>
 
-      <Button
-        type="submit"
-        disabled={loading}
-        className="w-full bg-gradient-to-r from-primary to-secondary"
-      >
-        {loading ? "Saving..." : (initialData ? "Update Vehicle" : "Add Vehicle")}
+      <Button type="submit" className="w-full bg-gradient-to-r from-primary to-secondary">
+        {initialData ? "Update Vehicle" : "Add Vehicle"}
       </Button>
     </form>
   );
