@@ -30,13 +30,21 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
     isSorn: false,
   };
 
-  const [formData, setFormData] = useState(initialData ? { ...blank, ...initialData } : blank);
+  const [formData, setFormData] = useState(
+    initialData ? { ...blank, ...initialData } : blank
+  );
 
   // If the dialog opens with different vehicle, update local state
   useEffect(() => {
     setFormData(initialData ? { ...blank, ...initialData } : blank);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData?.id]);
+
+  const normalizePlate = (s) =>
+    String(s || "")
+      .trim()
+      .replace(/\s+/g, "")
+      .toUpperCase();
 
   const handleDVLALookup = async () => {
     if (!formData.registrationNumber) {
@@ -76,7 +84,9 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
 
         // dates (only overwrite if present)
         motExpiry: dvla.motExpiryDate ?? dvla.motExpiry ?? prev.motExpiry,
-        taxExpiry: isSornFromDVLA ? "" : (dvla.taxDueDate ?? dvla.taxExpiry ?? prev.taxExpiry),
+        taxExpiry: isSornFromDVLA
+          ? ""
+          : (dvla.taxDueDate ?? dvla.taxExpiry ?? prev.taxExpiry),
 
         // flags
         isSorn: isSornFromDVLA ? true : prev.isSorn,
@@ -87,9 +97,10 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
         description: "DVLA data loaded successfully.",
       });
     } catch (err) {
+      console.error(err);
       toast({
         title: "Lookup failed",
-        description: "Could not fetch DVLA data. Is the server running?",
+        description: "Could not fetch DVLA data. Is the API working?",
         variant: "destructive",
       });
     } finally {
@@ -97,25 +108,34 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
     }
   };
 
-  // ✅ IMPORTANT: async + await so Supabase writes before closing
+  // ✅ IMPORTANT: async + await + loading state
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // avoid double submits
+    if (loading) return;
+
     const payload = {
       ...formData,
+
+      // normalize plate
+      registrationNumber: normalizePlate(formData.registrationNumber),
 
       // enforce flags
       isSorn: !!formData.isSorn,
       isUninsured: !!formData.isUninsured,
 
-      // keep blanks as "" (the new Supabase useVehicles hook converts blanks -> null)
+      // keep blanks as "" (Supabase hook converts blanks -> null)
       motExpiry: formData.motExpiry || "",
       taxExpiry: formData.isSorn ? "" : (formData.taxExpiry || ""),
       insuranceExpiry: formData.isUninsured ? "" : (formData.insuranceExpiry || ""),
-      insurancePolicyNumber: formData.isUninsured ? "" : (formData.insurancePolicyNumber || ""),
+      insurancePolicyNumber: formData.isUninsured
+        ? ""
+        : (formData.insurancePolicyNumber || ""),
       serviceDate: formData.serviceDate || "",
     };
 
+    setLoading(true);
     try {
       if (initialData) {
         await updateVehicle(initialData.id, payload);
@@ -133,11 +153,14 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
 
       onSuccess?.();
     } catch (err) {
+      console.error("Save failed:", err);
       toast({
         title: "Save failed",
         description: String(err?.message || err),
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -178,10 +201,22 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
               required
             />
           </div>
+
           <div className="flex items-end">
-            <Button type="button" onClick={handleDVLALookup} disabled={loading} variant="outline">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
-              DVLA Lookup
+            <Button
+              type="button"
+              onClick={handleDVLALookup}
+              disabled={loading}
+              variant="outline"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Search className="h-4 w-4 mr-2" />
+                  DVLA Lookup
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -212,7 +247,9 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
             <Label htmlFor="isSorn" className="cursor-pointer">
               Currently SORN
             </Label>
-            <p className="text-xs text-muted-foreground">If ticked, Tax date becomes “not applicable”.</p>
+            <p className="text-xs text-muted-foreground">
+              If ticked, Tax date becomes “not applicable”.
+            </p>
           </div>
         </div>
 
@@ -230,7 +267,9 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
             <Label htmlFor="isUninsured" className="cursor-pointer">
               Currently not insured
             </Label>
-            <p className="text-xs text-muted-foreground">If ticked, Insurance date & policy number become “not applicable”.</p>
+            <p className="text-xs text-muted-foreground">
+              If ticked, Insurance date & policy number become “not applicable”.
+            </p>
           </div>
         </div>
 
@@ -278,8 +317,12 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
         <DateField label="Last Service" name="serviceDate" value={formData.serviceDate} onChange={handleChange} />
       </div>
 
-      <Button type="submit" className="w-full bg-gradient-to-r from-primary to-secondary">
-        {initialData ? "Update Vehicle" : "Add Vehicle"}
+      <Button
+        type="submit"
+        disabled={loading}
+        className="w-full bg-gradient-to-r from-primary to-secondary"
+      >
+        {loading ? "Saving..." : (initialData ? "Update Vehicle" : "Add Vehicle")}
       </Button>
     </form>
   );
@@ -300,7 +343,9 @@ function DateField({ label, hint, ...props }) {
     <div>
       <Label>{label}</Label>
       <Input type="date" {...props} />
-      <p className="text-xs text-muted-foreground mt-1">{hint || "Leave blank = No data held."}</p>
+      <p className="text-xs text-muted-foreground mt-1">
+        {hint || "Leave blank = No data held."}
+      </p>
     </div>
   );
 }

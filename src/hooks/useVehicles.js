@@ -1,223 +1,194 @@
-// src/hooks/useVehicles.js
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 
-// Keep your DVLA fetch helper (optional)
-const DVLA_FALLBACK = {
-  AB12CDE: { make: "BMW", model: "M3", year: 2020, color: "Alpine White", fuelType: "Petrol", isSorn: false },
-  XY98ZAB: { make: "Audi", model: "A4", year: 2019, color: "Mythos Black", fuelType: "Diesel", isSorn: true },
+const MOCK_DVLA_DATA = {
+  AB12CDE: {
+    make: "VAUXHALL",
+    model: "",
+    yearOfManufacture: 2017,
+    colour: "WHITE",
+    fuelType: "PETROL",
+    motExpiryDate: "2026-06-11",
+    taxDueDate: "2026-12-01",
+    taxStatus: "Taxed",
+  },
 };
 
-function toUiVehicle(row) {
-  if (!row) return null;
+function toDb(vehicle, userId) {
+  // Map app fields -> DB columns (snake_case)
   return {
-    id: row.id,
-    userId: row.user_id,
+    user_id: userId,
 
-    registrationNumber: row.registration_number,
-    nickname: row.nickname,
+    registration_number: vehicle.registrationNumber?.replace(/\s+/g, "").toUpperCase() || "",
+    nickname: vehicle.nickname || "",
 
-    make: row.make || "",
-    model: row.model || "",
-    year: row.year ?? "",
-    color: row.color || "",
-    fuelType: row.fuel_type || "",
-    mileage: row.mileage ?? "",
+    make: vehicle.make || "",
+    model: vehicle.model || "",
+    year: vehicle.year ? Number(vehicle.year) : null,
+    color: vehicle.color || "",
+    fuel_type: vehicle.fuelType || "",
+    mileage: vehicle.mileage === "" || vehicle.mileage === null || vehicle.mileage === undefined ? null : Number(vehicle.mileage),
 
-    motExpiry: row.mot_expiry ?? "",        // UI can treat "" as blank
-    taxExpiry: row.tax_expiry ?? "",
-    insuranceExpiry: row.insurance_expiry ?? "",
-    insurancePolicyNumber: row.insurance_policy_number ?? "",
+    mot_expiry: vehicle.motExpiry || null,
+    tax_expiry: vehicle.isSorn ? null : (vehicle.taxExpiry || null),
+    insurance_expiry: vehicle.isUninsured ? null : (vehicle.insuranceExpiry || null),
+    insurance_policy_number: vehicle.isUninsured ? null : (vehicle.insurancePolicyNumber || null),
 
-    isUninsured: !!row.is_uninsured,
-    isSorn: !!row.is_sorn,
-    serviceDate: row.service_date ?? "",
+    is_uninsured: !!vehicle.isUninsured,
+    is_sorn: !!vehicle.isSorn,
+    service_date: vehicle.serviceDate || null,
 
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    updated_at: new Date().toISOString(),
   };
 }
 
-function toDbVehicle(ui, userId) {
-  // Convert UI blanks -> null for DB dates/numbers
-  const nullIfBlank = (v) => {
-    if (v === null || v === undefined) return null;
-    const s = String(v).trim();
-    return s.length ? s : null;
-  };
-
-  const intOrNull = (v) => {
-    const s = String(v ?? "").trim();
-    if (!s) return null;
-    const n = Number(s);
-    return Number.isFinite(n) ? Math.trunc(n) : null;
-  };
-
-  const cleanVrm = String(ui?.registrationNumber || "").replace(/\s+/g, "").toUpperCase();
-
+function fromDb(row) {
+  // Map DB -> app fields (camelCase)
   return {
-    user_id: userId,
-    registration_number: cleanVrm,
-    nickname: String(ui?.nickname || "").trim(),
+    id: row.id,
+    registrationNumber: row.registration_number,
+    nickname: row.nickname,
 
-    make: nullIfBlank(ui?.make),
-    model: nullIfBlank(ui?.model),
-    year: intOrNull(ui?.year),
-    color: nullIfBlank(ui?.color),
-    fuel_type: nullIfBlank(ui?.fuelType),
-    mileage: intOrNull(ui?.mileage),
+    make: row.make,
+    model: row.model,
+    year: row.year,
+    color: row.color,
+    fuelType: row.fuel_type,
+    mileage: row.mileage,
 
-    mot_expiry: nullIfBlank(ui?.motExpiry),
-    tax_expiry: ui?.isSorn ? null : nullIfBlank(ui?.taxExpiry),
-    insurance_expiry: ui?.isUninsured ? null : nullIfBlank(ui?.insuranceExpiry),
-    insurance_policy_number: ui?.isUninsured ? null : nullIfBlank(ui?.insurancePolicyNumber),
+    motExpiry: row.mot_expiry || "",
+    taxExpiry: row.tax_expiry || "",
+    insuranceExpiry: row.insurance_expiry || "",
+    insurancePolicyNumber: row.insurance_policy_number || "",
 
-    is_uninsured: !!ui?.isUninsured,
-    is_sorn: !!ui?.isSorn,
-    service_date: nullIfBlank(ui?.serviceDate),
+    isUninsured: !!row.is_uninsured,
+    isSorn: !!row.is_sorn,
+    serviceDate: row.service_date || "",
+
+    lastUpdated: row.updated_at || row.created_at,
   };
 }
 
 export function useVehicles() {
+  const { user } = useAuth();
   const [vehicles, setVehicles] = useState([]);
-  const [loadingVehicles, setLoadingVehicles] = useState(true);
+  const [loadingVehicles, setLoadingVehicles] = useState(false);
+
+  // IMPORTANT: set this to your actual table name
+  // If you named it differently (e.g. "vg_vehicles"), change it here.
+  const TABLE = "vehicles";
 
   const refresh = useCallback(async () => {
+    if (!user?.id) return;
     setLoadingVehicles(true);
 
-    const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
-    if (sessErr) {
-      console.error(sessErr);
-      setVehicles([]);
-      setLoadingVehicles(false);
-      return;
-    }
-
-    const userId = sessionData?.session?.user?.id;
-    if (!userId) {
-      setVehicles([]);
-      setLoadingVehicles(false);
-      return;
-    }
-
     const { data, error } = await supabase
-      .from("vehicles")
+      .from(TABLE)
       .select("*")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error(error);
-      setVehicles([]);
-    } else {
-      setVehicles((data || []).map(toUiVehicle));
-    }
-
     setLoadingVehicles(false);
-  }, []);
+
+    if (error) throw error;
+    setVehicles((data || []).map(fromDb));
+  }, [user?.id]);
 
   useEffect(() => {
-    // Load once
-    refresh();
-
-    // React to auth changes (login/logout)
-    const { data: sub } = supabase.auth.onAuthStateChange(() => refresh());
-    return () => sub?.subscription?.unsubscribe?.();
-  }, [refresh]);
+    if (!user?.id) {
+      setVehicles([]);
+      return;
+    }
+    refresh().catch((e) => {
+      console.error("Failed to load vehicles:", e);
+      setVehicles([]);
+    });
+  }, [user?.id, refresh]);
 
   const addVehicle = useCallback(
     async (vehicleData) => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
-      if (!userId) throw new Error("Not logged in");
+      if (!user?.id) throw new Error("Not logged in.");
 
-      const payload = toDbVehicle(vehicleData, userId);
+      const payload = toDb(vehicleData, user.id);
 
       const { data, error } = await supabase
-        .from("vehicles")
+        .from(TABLE)
         .insert(payload)
         .select("*")
         .single();
 
       if (error) throw error;
 
-      const ui = toUiVehicle(data);
-      setVehicles((prev) => [ui, ...prev]);
-      return ui;
+      const created = fromDb(data);
+      setVehicles((prev) => [created, ...prev]);
+      return created;
     },
-    []
+    [user?.id]
   );
 
   const updateVehicle = useCallback(
     async (id, updates) => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
-      if (!userId) throw new Error("Not logged in");
+      if (!user?.id) throw new Error("Not logged in.");
 
-      const payload = toDbVehicle(updates, userId);
-
-      // Prevent changing owner by accident
-      delete payload.user_id;
+      const payload = toDb(updates, user.id);
+      delete payload.user_id; // don't overwrite
 
       const { data, error } = await supabase
-        .from("vehicles")
+        .from(TABLE)
         .update(payload)
         .eq("id", id)
+        .eq("user_id", user.id)
         .select("*")
         .single();
 
       if (error) throw error;
 
-      const ui = toUiVehicle(data);
-      setVehicles((prev) => prev.map((v) => (v.id === id ? ui : v)));
-      return ui;
+      const updated = fromDb(data);
+      setVehicles((prev) => prev.map((v) => (String(v.id) === String(id) ? updated : v)));
+      return updated;
     },
-    []
+    [user?.id]
   );
 
-  const deleteVehicle = useCallback(async (id) => {
-    const { error } = await supabase.from("vehicles").delete().eq("id", id);
-    if (error) throw error;
-    setVehicles((prev) => prev.filter((v) => v.id !== id));
-  }, []);
+  const deleteVehicle = useCallback(
+    async (id) => {
+      if (!user?.id) throw new Error("Not logged in.");
 
-  // ✅ REAL DVLA LOOKUP (via your /api proxy). Falls back to mock if not available.
+      const { error } = await supabase
+        .from(TABLE)
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      setVehicles((prev) => prev.filter((v) => String(v.id) !== String(id)));
+    },
+    [user?.id]
+  );
+
+  // ✅ DVLA lookup via your Vercel API route
   const lookupDVLA = useCallback(async (registrationNumber) => {
     const clean = String(registrationNumber || "").replace(/\s+/g, "").toUpperCase();
     if (!clean) return null;
 
     try {
       const res = await fetch(`/api/dvla/${clean}`);
-      if (!res.ok) throw new Error("DVLA lookup failed");
-      const data = await res.json();
-
-      // Map DVLA response -> your form fields
-      // (DVLA uses: make, colour, fuelType, yearOfManufacture, motExpiryDate, taxDueDate, taxStatus, motStatus)
-      return {
-        make: data.make || "",
-        model: "", // DVLA response typically doesn't include model
-        year: data.yearOfManufacture ?? "",
-        color: data.colour || "",
-        fuelType: data.fuelType || "",
-        // Optional: autopopulate dates if you want
-        motExpiry: data.motExpiryDate || "",
-        taxExpiry: data.taxDueDate || "",
-        isSorn: (String(data.taxStatus || "").toLowerCase() === "sorn") || false,
-      };
-    } catch (_e) {
-      return DVLA_FALLBACK[clean] || null;
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      return MOCK_DVLA_DATA[clean] || null;
     }
   }, []);
 
-  return useMemo(
-    () => ({
-      vehicles,
-      loadingVehicles,
-      refresh,
-      addVehicle,
-      updateVehicle,
-      deleteVehicle,
-      lookupDVLA,
-    }),
-    [vehicles, loadingVehicles, refresh, addVehicle, updateVehicle, deleteVehicle, lookupDVLA]
-  );
+  return {
+    vehicles,
+    loadingVehicles,
+    refresh,
+    addVehicle,
+    updateVehicle,
+    deleteVehicle,
+    lookupDVLA,
+  };
 }
