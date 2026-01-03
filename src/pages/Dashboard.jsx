@@ -1,3 +1,4 @@
+// src/pages/Dashboard.jsx
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Helmet } from "react-helmet";
@@ -126,7 +127,21 @@ export default function Dashboard() {
       </div>
 
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="max-w-[420px] max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-[420px] max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(e) => {
+            const t = e.target;
+            if (t?.closest?.("[data-filepicker]") || t?.closest?.('input[type="file"]')) {
+              e.preventDefault();
+            }
+          }}
+          onPointerDownOutside={(e) => {
+            const t = e.target;
+            if (t?.closest?.("[data-filepicker]") || t?.closest?.('input[type="file"]')) {
+              e.preventDefault();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Add New Vehicle</DialogTitle>
           </DialogHeader>

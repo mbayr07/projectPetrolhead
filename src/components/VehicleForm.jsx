@@ -115,7 +115,11 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
 
   const handleDVLALookup = async () => {
     if (!formData.registrationNumber) {
-      toast({ title: "Registration Required", description: "Please enter a registration number first.", variant: "destructive" });
+      toast({
+        title: "Registration Required",
+        description: "Please enter a registration number first.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -123,7 +127,11 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
     try {
       const dvla = await lookupDVLA(formData.registrationNumber);
       if (!dvla) {
-        toast({ title: "Not Found", description: "No DVLA data returned for this registration.", variant: "destructive" });
+        toast({
+          title: "Not Found",
+          description: "No DVLA data returned for this registration.",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -132,6 +140,7 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
 
       setFormData((prev) => ({
         ...prev,
+
         make: dvla.make ?? prev.make,
         model: dvla.model ?? prev.model,
         year: dvla.yearOfManufacture ?? dvla.year ?? prev.year,
@@ -146,7 +155,11 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
 
       toast({ title: "Vehicle Found!", description: "DVLA data loaded successfully." });
     } catch {
-      toast({ title: "Lookup failed", description: "Could not fetch DVLA data. Is the server running?", variant: "destructive" });
+      toast({
+        title: "Lookup failed",
+        description: "Could not fetch DVLA data. Is the server running?",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -183,17 +196,19 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
       // ✅ 2) Upload photo AFTER vehicle exists
       if (photoFile && vehicleId) {
         if (!isAllowedImage(photoFile)) {
-          throw new Error(`Please upload a JPG, PNG, or WEBP image. (Got: name="${photoFile?.name}", type="${photoFile?.type}")`);
+          throw new Error(
+            `Please upload a JPG, PNG, or WEBP image. (Got: name="${photoFile?.name}", type="${photoFile?.type}")`
+          );
         }
 
-        const uploaded = await uploadVehiclePhoto(vehicleId, photoFile); // expects (vehicleId, file)
+        const uploaded = await uploadVehiclePhoto(photoFile, basePayload.registrationNumber); // ✅ matches your hook signature
         if (uploaded?.photoUrl) {
           await updateVehicle(vehicleId, {
             photoUrl: uploaded.photoUrl,
             photoPath: uploaded.photoPath,
           });
 
-          // update local UI immediately
+          // keep UI in sync (no flicker)
           setFormData((p) => ({
             ...p,
             photoUrl: uploaded.photoUrl,
@@ -239,8 +254,8 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4">
-        {/* Photo */}
-        <div className="rounded-xl border border-border bg-card/40 p-4">
+        {/* Photo (tagged so the Dialog can ignore outside-click close) */}
+        <div className="rounded-xl border border-border bg-card/40 p-4" data-filepicker onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-1">
               <Label>Vehicle photo</Label>
@@ -263,7 +278,12 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
                 </div>
               )}
 
-              <label className="cursor-pointer">
+              <label
+                className="cursor-pointer"
+                data-filepicker
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
@@ -302,12 +322,26 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
 
         <div>
           <Label htmlFor="nickname">Nickname</Label>
-          <Input id="nickname" name="nickname" value={formData.nickname} onChange={handleChange} placeholder="e.g., My M3" required />
+          <Input
+            id="nickname"
+            name="nickname"
+            value={formData.nickname}
+            onChange={handleChange}
+            placeholder="e.g., My M3"
+            required
+          />
         </div>
 
         {/* SORN */}
         <div className="flex items-start gap-3 rounded-xl border border-border bg-card/40 p-4">
-          <input id="isSorn" name="isSorn" type="checkbox" checked={!!formData.isSorn} onChange={handleChange} className="mt-1 h-4 w-4 accent-primary" />
+          <input
+            id="isSorn"
+            name="isSorn"
+            type="checkbox"
+            checked={!!formData.isSorn}
+            onChange={handleChange}
+            className="mt-1 h-4 w-4 accent-primary"
+          />
           <div className="space-y-1">
             <Label htmlFor="isSorn" className="cursor-pointer">Currently SORN</Label>
             <p className="text-xs text-muted-foreground">If ticked, Tax date becomes “not applicable”.</p>
@@ -316,7 +350,14 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
 
         {/* Uninsured */}
         <div className="flex items-start gap-3 rounded-xl border border-border bg-card/40 p-4">
-          <input id="isUninsured" name="isUninsured" type="checkbox" checked={!!formData.isUninsured} onChange={handleChange} className="mt-1 h-4 w-4 accent-primary" />
+          <input
+            id="isUninsured"
+            name="isUninsured"
+            type="checkbox"
+            checked={!!formData.isUninsured}
+            onChange={handleChange}
+            className="mt-1 h-4 w-4 accent-primary"
+          />
           <div className="space-y-1">
             <Label htmlFor="isUninsured" className="cursor-pointer">Currently not insured</Label>
             <p className="text-xs text-muted-foreground">If ticked, Insurance date & policy number become “not applicable”.</p>
@@ -337,10 +378,31 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
         <InputField label="Mileage" name="mileage" type="number" value={formData.mileage} onChange={handleChange} />
 
         <DateField label="MOT Expiry" name="motExpiry" value={formData.motExpiry} onChange={handleChange} />
-        <DateField label="Tax Expiry" name="taxExpiry" value={formData.taxExpiry} onChange={handleChange} disabled={!!formData.isSorn} hint={formData.isSorn ? "Not applicable while SORN." : undefined} />
-        <DateField label="Insurance Expiry" name="insuranceExpiry" value={formData.insuranceExpiry} onChange={handleChange} disabled={!!formData.isUninsured} hint={formData.isUninsured ? "Not applicable while not insured." : undefined} />
+        <DateField
+          label="Tax Expiry"
+          name="taxExpiry"
+          value={formData.taxExpiry}
+          onChange={handleChange}
+          disabled={!!formData.isSorn}
+          hint={formData.isSorn ? "Not applicable while SORN." : undefined}
+        />
+        <DateField
+          label="Insurance Expiry"
+          name="insuranceExpiry"
+          value={formData.insuranceExpiry}
+          onChange={handleChange}
+          disabled={!!formData.isUninsured}
+          hint={formData.isUninsured ? "Not applicable while not insured." : undefined}
+        />
 
-        <InputField label="Insurance Policy Number" name="insurancePolicyNumber" value={formData.insurancePolicyNumber} onChange={handleChange} disabled={!!formData.isUninsured} />
+        <InputField
+          label="Insurance Policy Number"
+          name="insurancePolicyNumber"
+          value={formData.insurancePolicyNumber}
+          onChange={handleChange}
+          disabled={!!formData.isUninsured}
+        />
+
         <DateField label="Last Service" name="serviceDate" value={formData.serviceDate} onChange={handleChange} />
       </div>
 
