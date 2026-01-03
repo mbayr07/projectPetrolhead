@@ -45,10 +45,10 @@ export default function App() {
     <Router>
       <AuthProvider>
         <Helmet>
-          <title>Vehicle Guardian</title>
+          <title>AutoMateAI</title>
           <meta
             name="description"
-            content="Manage vehicles with reminders, document storage, and reporting. Vehicle Guardian keeps you organised and compliant."
+            content="Manage vehicles with reminders, document storage, and reporting. AutoMateAI keeps you organised and compliant."
           />
           <meta
             name="viewport"

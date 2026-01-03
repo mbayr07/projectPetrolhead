@@ -75,7 +75,7 @@ export default function DocumentVault() {
   return (
     <Layout>
       <Helmet>
-        <title>Document Vault - Vehicle Guardian</title>
+        <title>Document Vault - AutoMateAI</title>
         <meta
           name="description"
           content="Securely store and manage all your vehicle documents in one place. Upload insurance certificates, MOT documents, and service records."

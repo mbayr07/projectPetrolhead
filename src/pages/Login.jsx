@@ -55,7 +55,7 @@ export default function Login() {
   return (
     <>
       <Helmet>
-        <title>Login - Vehicle Guardian</title>
+        <title>Login - AutoMateAI</title>
       </Helmet>
 
       <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">

@@ -12,7 +12,7 @@ export default function Reminders() {
   return (
     <Layout>
       <Helmet>
-        <title>Reminders - Vehicle Guardian</title>
+        <title>Reminders - AutoMateAI</title>
         <meta
           name="description"
           content="Manage reminders for MOT, tax, insurance, and servicing."

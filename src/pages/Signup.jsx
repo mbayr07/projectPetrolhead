@@ -70,7 +70,7 @@ export default function Signup() {
   return (
     <>
       <Helmet>
-        <title>Sign Up - Vehicle Guardian</title>
+        <title>Sign Up - AutoMateAI</title>
       </Helmet>
 
       <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">

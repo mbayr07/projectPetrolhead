@@ -46,7 +46,7 @@ export default function Dashboard() {
   return (
     <Layout>
       <Helmet>
-        <title>Dashboard - Vehicle Guardian</title>
+        <title>Dashboard - AutoMateAI</title>
         <meta
           name="description"
           content="Manage all your vehicles in one place. View MOT, tax, and insurance expiry dates with real-time status indicators."

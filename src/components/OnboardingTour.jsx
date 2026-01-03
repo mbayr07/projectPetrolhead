@@ -6,7 +6,7 @@
 
 // const tourSteps = [
 //   {
-//     title: 'Welcome to Vehicle Guardian! 🚗',
+//     title: 'Welcome to AutoMateAI! 🚗',
 //     description: 'Your complete vehicle management solution. Let\'s take a quick tour to get you started.',
 //     highlight: null
 //   },

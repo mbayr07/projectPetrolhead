@@ -100,7 +100,7 @@ export default function VehicleDetails() {
   return (
     <Layout>
       <Helmet>
-        <title>{safeText(vehicle.nickname, "Vehicle")} - Vehicle Guardian</title>
+        <title>{safeText(vehicle.nickname, "Vehicle")} - AutoMateAI</title>
       </Helmet>
 
       <div className="space-y-6">

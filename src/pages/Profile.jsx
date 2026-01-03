@@ -29,10 +29,10 @@ export default function Profile() {
   return (
     <Layout>
       <Helmet>
-        <title>Profile - Vehicle Guardian</title>
+        <title>Profile - AutoMateAI</title>
         <meta
           name="description"
-          content="View and manage your Vehicle Guardian account settings and preferences."
+          content="View and manage your AutoMateAI account settings and preferences."
         />
       </Helmet>
 

@@ -62,7 +62,7 @@ export default function Layout({ children }) {
             <Car className="h-5 w-5 text-white" />
           </div>
           <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Vehicle Guardian
+            AutoMateAI
           </span>
         </Link>
 

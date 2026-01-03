@@ -78,7 +78,7 @@ export default function Reports() {
   return (
     <Layout>
       <Helmet>
-        <title>Reports - Vehicle Guardian</title>
+        <title>Reports - AutoMateAI</title>
         <meta
           name="description"
           content="Generate comprehensive vehicle reports and export them as PDF. Track maintenance history, expenses, and compliance status."
