@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 
@@ -16,11 +16,11 @@ const MOCK_DVLA_DATA = {
 };
 
 function toDb(vehicle, userId) {
-  // Map app fields -> DB columns (snake_case)
   return {
     user_id: userId,
 
-    registration_number: vehicle.registrationNumber?.replace(/\s+/g, "").toUpperCase() || "",
+    registration_number:
+      vehicle.registrationNumber?.replace(/\s+/g, "").toUpperCase() || "",
     nickname: vehicle.nickname || "",
 
     make: vehicle.make || "",
@@ -28,23 +28,33 @@ function toDb(vehicle, userId) {
     year: vehicle.year ? Number(vehicle.year) : null,
     color: vehicle.color || "",
     fuel_type: vehicle.fuelType || "",
-    mileage: vehicle.mileage === "" || vehicle.mileage === null || vehicle.mileage === undefined ? null : Number(vehicle.mileage),
+    mileage:
+      vehicle.mileage === "" ||
+      vehicle.mileage === null ||
+      vehicle.mileage === undefined
+        ? null
+        : Number(vehicle.mileage),
 
     mot_expiry: vehicle.motExpiry || null,
-    tax_expiry: vehicle.isSorn ? null : (vehicle.taxExpiry || null),
-    insurance_expiry: vehicle.isUninsured ? null : (vehicle.insuranceExpiry || null),
-    insurance_policy_number: vehicle.isUninsured ? null : (vehicle.insurancePolicyNumber || null),
+    tax_expiry: vehicle.isSorn ? null : vehicle.taxExpiry || null,
+    insurance_expiry: vehicle.isUninsured ? null : vehicle.insuranceExpiry || null,
+    insurance_policy_number: vehicle.isUninsured
+      ? null
+      : vehicle.insurancePolicyNumber || null,
 
     is_uninsured: !!vehicle.isUninsured,
     is_sorn: !!vehicle.isSorn,
     service_date: vehicle.serviceDate || null,
+
+    // ✅ Photos
+    photo_url: vehicle.photoUrl || null,
+    photo_path: vehicle.photoPath || null,
 
     updated_at: new Date().toISOString(),
   };
 }
 
 function fromDb(row) {
-  // Map DB -> app fields (camelCase)
   return {
     id: row.id,
     registrationNumber: row.registration_number,
@@ -66,6 +76,10 @@ function fromDb(row) {
     isSorn: !!row.is_sorn,
     serviceDate: row.service_date || "",
 
+    // ✅ Photos
+    photoUrl: row.photo_url || "",
+    photoPath: row.photo_path || "",
+
     lastUpdated: row.updated_at || row.created_at,
   };
 }
@@ -75,9 +89,10 @@ export function useVehicles() {
   const [vehicles, setVehicles] = useState([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
 
-  // IMPORTANT: set this to your actual table name
-  // If you named it differently (e.g. "vg_vehicles"), change it here.
   const TABLE = "vehicles";
+
+  // ✅ Change if you named the bucket differently
+  const BUCKET = "vehicle-photos";
 
   const refresh = useCallback(async () => {
     if (!user?.id) return;
@@ -132,7 +147,7 @@ export function useVehicles() {
       if (!user?.id) throw new Error("Not logged in.");
 
       const payload = toDb(updates, user.id);
-      delete payload.user_id; // don't overwrite
+      delete payload.user_id;
 
       const { data, error } = await supabase
         .from(TABLE)
@@ -145,7 +160,9 @@ export function useVehicles() {
       if (error) throw error;
 
       const updated = fromDb(data);
-      setVehicles((prev) => prev.map((v) => (String(v.id) === String(id) ? updated : v)));
+      setVehicles((prev) =>
+        prev.map((v) => (String(v.id) === String(id) ? updated : v))
+      );
       return updated;
     },
     [user?.id]
@@ -154,6 +171,12 @@ export function useVehicles() {
   const deleteVehicle = useCallback(
     async (id) => {
       if (!user?.id) throw new Error("Not logged in.");
+
+      // Optional: if you want auto-delete photo when deleting vehicle
+      const existing = vehicles.find((v) => String(v.id) === String(id));
+      if (existing?.photoPath) {
+        await supabase.storage.from(BUCKET).remove([existing.photoPath]);
+      }
 
       const { error } = await supabase
         .from(TABLE)
@@ -165,12 +188,14 @@ export function useVehicles() {
 
       setVehicles((prev) => prev.filter((v) => String(v.id) !== String(id)));
     },
-    [user?.id]
+    [user?.id, vehicles]
   );
 
-  // ✅ DVLA lookup via your Vercel API route
+  // ✅ DVLA lookup via Vercel API route
   const lookupDVLA = useCallback(async (registrationNumber) => {
-    const clean = String(registrationNumber || "").replace(/\s+/g, "").toUpperCase();
+    const clean = String(registrationNumber || "")
+      .replace(/\s+/g, "")
+      .toUpperCase();
     if (!clean) return null;
 
     try {
@@ -182,6 +207,96 @@ export function useVehicles() {
     }
   }, []);
 
+  // ============================
+  // ✅ Vehicle Photos (Supabase Storage)
+  // ============================
+
+  const uploadVehiclePhoto = useCallback(
+    async (vehicleId, file) => {
+      if (!user?.id) throw new Error("Not logged in.");
+      if (!vehicleId) throw new Error("vehicleId is required.");
+      if (!file) throw new Error("No file provided.");
+
+      // Basic file validation
+      const allowed = ["image/jpeg", "image/png", "image/webp"];
+      if (!allowed.includes(file.type)) {
+        throw new Error("Please upload a JPG, PNG, or WEBP image.");
+      }
+
+      // Create a stable path: userId/vehicleId/timestamp.ext
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const safeExt = ext.replace(/[^a-z0-9]/g, "") || "jpg";
+      const path = `${user.id}/${vehicleId}/${Date.now()}.${safeExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(path, file, {
+          upsert: true,
+          contentType: file.type,
+          cacheControl: "3600",
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      const publicUrl = pub?.publicUrl;
+
+      if (!publicUrl) {
+        throw new Error("Failed to generate public URL for uploaded image.");
+      }
+
+      return { photoUrl: publicUrl, photoPath: path };
+    },
+    [user?.id]
+  );
+
+  const removeVehiclePhoto = useCallback(
+    async (vehicleId) => {
+      if (!user?.id) throw new Error("Not logged in.");
+      if (!vehicleId) throw new Error("vehicleId is required.");
+
+      const current = vehicles.find((v) => String(v.id) === String(vehicleId));
+      if (!current) throw new Error("Vehicle not found.");
+      if (!current.photoPath) {
+        // nothing to remove, still update db to nulls for safety
+        await updateVehicle(vehicleId, { photoUrl: "", photoPath: "" });
+        return;
+      }
+
+      await supabase.storage.from(BUCKET).remove([current.photoPath]);
+
+      // Clear in DB
+      await updateVehicle(vehicleId, { photoUrl: "", photoPath: "" });
+    },
+    [user?.id, vehicles, updateVehicle]
+  );
+
+  // One-call helper: upload + update DB (and cleanup old image)
+  const setVehiclePhotoFromFile = useCallback(
+    async (vehicleId, file) => {
+      if (!user?.id) throw new Error("Not logged in.");
+      const current = vehicles.find((v) => String(v.id) === String(vehicleId));
+
+      // Upload new
+      const uploaded = await uploadVehiclePhoto(vehicleId, file);
+
+      // Update DB first (so UI gets it immediately)
+      await updateVehicle(vehicleId, {
+        photoUrl: uploaded.photoUrl,
+        photoPath: uploaded.photoPath,
+      });
+
+      // Then cleanup old file (optional but recommended)
+      const oldPath = current?.photoPath;
+      if (oldPath && oldPath !== uploaded.photoPath) {
+        await supabase.storage.from(BUCKET).remove([oldPath]);
+      }
+
+      return uploaded;
+    },
+    [user?.id, vehicles, uploadVehiclePhoto, updateVehicle]
+  );
+
   return {
     vehicles,
     loadingVehicles,
@@ -190,5 +305,10 @@ export function useVehicles() {
     updateVehicle,
     deleteVehicle,
     lookupDVLA,
+
+    // ✅ photos
+    uploadVehiclePhoto,
+    removeVehiclePhoto,
+    setVehiclePhotoFromFile,
   };
 }

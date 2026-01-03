@@ -1,7 +1,7 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Car, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import React from "react";
+import { motion } from "framer-motion";
+import { Car, AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export default function VehicleCard({ vehicle }) {
   const navigate = useNavigate();
@@ -14,8 +14,8 @@ export default function VehicleCard({ vehicle }) {
 
   const fmt = (dateStr) => {
     const d = parseDate(dateStr);
-    if (!d) return 'No data';
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    if (!d) return "No data";
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
   };
 
   const getStatus = () => {
@@ -41,13 +41,12 @@ export default function VehicleCard({ vehicle }) {
       (taxDays !== null && taxDays >= 0 && taxDays < 30) ||
       (insDays !== null && insDays >= 0 && insDays < 30);
 
-    if (expired) return { icon: AlertTriangle, color: 'text-red-500' };
-    if (warning) return { icon: Clock, color: 'text-yellow-500' };
-    return { icon: CheckCircle, color: 'text-green-500' };
+    if (expired) return { icon: AlertTriangle, color: "text-red-500" };
+    if (warning) return { icon: Clock, color: "text-yellow-500" };
+    return { icon: CheckCircle, color: "text-green-500" };
   };
 
   const { icon: StatusIcon, color } = getStatus();
-
   const cols = 1 + (vehicle.isSorn ? 0 : 1) + (vehicle.isUninsured ? 0 : 1);
 
   return (
@@ -60,11 +59,25 @@ export default function VehicleCard({ vehicle }) {
       <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-full blur-3xl -mr-16 -mt-16" />
 
       <div className="relative">
+        {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-              <Car className="h-6 w-6 text-white" />
+            {/* Vehicle image / fallback icon */}
+            <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted flex items-center justify-center shrink-0">
+              {vehicle.photoUrl ? (
+                <img
+                  src={vehicle.photoUrl}
+                  alt={vehicle.nickname}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="h-full w-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+                  <Car className="h-6 w-6 text-white" />
+                </div>
+              )}
             </div>
+
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-bold text-lg">{vehicle.nickname}</h3>
@@ -81,14 +94,22 @@ export default function VehicleCard({ vehicle }) {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground">{vehicle.registrationNumber}</p>
+
+              <p className="text-sm text-muted-foreground">
+                {vehicle.registrationNumber}
+              </p>
             </div>
           </div>
 
-          <StatusIcon className={`h-6 w-6 ${color} warning-light`} />
+          <StatusIcon className={`h-6 w-6 ${color}`} />
         </div>
 
-        <div className={`grid gap-2 text-xs ${cols === 3 ? 'grid-cols-3' : cols === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {/* Dates grid */}
+        <div
+          className={`grid gap-2 text-xs ${
+            cols === 3 ? "grid-cols-3" : cols === 2 ? "grid-cols-2" : "grid-cols-1"
+          }`}
+        >
           <div className="bg-muted/50 rounded-lg p-2 text-center">
             <div className="text-muted-foreground mb-1">MOT</div>
             <div className="font-semibold">{fmt(vehicle.motExpiry)}</div>
