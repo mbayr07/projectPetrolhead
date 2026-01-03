@@ -19,13 +19,24 @@ function cleanVrm(v) {
   return String(v || "").replace(/\s+/g, "").toUpperCase();
 }
 
+function isRealFile(x) {
+  return (
+    x &&
+    typeof x === "object" &&
+    (x instanceof File ||
+      (typeof x.name === "string" &&
+        typeof x.size === "number" &&
+        typeof x.arrayBuffer === "function"))
+  );
+}
+
 function guessExt(file) {
   const name = String(file?.name || "").toLowerCase();
   const m = name.match(/\.([a-z0-9]+)$/i);
   if (m?.[1]) return m[1];
 
   const mime = String(file?.type || "").toLowerCase();
-  if (mime === "image/png") return "png";
+  if (mime === "image/png" || mime === "image/x-png") return "png";
   if (mime === "image/jpeg" || mime === "image/jpg") return "jpg";
   if (mime === "image/webp") return "webp";
   if (mime === "image/heic" || mime === "image/heif") return "heic";
@@ -43,7 +54,7 @@ function guessContentType(file, ext) {
 }
 
 function toDb(vehicle, userId) {
-  // Accept both camelCase + snake_case (your form uses photo_url/photo_path)
+  // Accept both camelCase + snake_case
   const photoUrl = vehicle.photoUrl ?? vehicle.photo_url ?? "";
   const photoPath = vehicle.photoPath ?? vehicle.photo_path ?? "";
 
@@ -229,18 +240,41 @@ export function useVehicles() {
     }
   }, []);
 
-  // ✅ Signature matches your VehicleForm: uploadVehiclePhoto(file, registrationNumber)
+  /**
+   * ✅ uploadVehiclePhoto supports BOTH calling styles:
+   *   1) uploadVehiclePhoto(file, registrationNumber)  <-- your VehicleForm
+   *   2) uploadVehiclePhoto(vehicleId, file)           <-- other code
+   */
   const uploadVehiclePhoto = useCallback(
-    async (file, registrationNumber) => {
+    async (a, b) => {
       if (!user?.id) throw new Error("Not logged in.");
-      if (!file) throw new Error("No file provided.");
+
+      // Detect which arg is the File
+      const file = isRealFile(a) ? a : isRealFile(b) ? b : null;
+      const other = file === a ? b : a;
+
+      if (!file) {
+        throw new Error(
+          `Please upload a JPG, PNG, or WEBP image. (Got: name="${a?.name}", type="${a?.type}")`
+        );
+      }
+
+      // If "other" is a string => treat as VRM, else treat as vehicleId
+      const vrm = typeof other === "string" ? cleanVrm(other) : null;
+      const vehicleId = typeof other === "string" ? null : other;
 
       const mime = String(file.type || "").toLowerCase();
       const extRaw = guessExt(file);
-      const ext = extRaw === "jpeg" ? "jpg" : extRaw;
+      const extNorm = extRaw === "jpeg" ? "jpg" : extRaw;
+
+      // Block HEIC/HEIF explicitly
+      if (mime.includes("heic") || mime.includes("heif") || extNorm === "heic" || extNorm === "heif") {
+        throw new Error("HEIC/HEIF isn’t supported yet. Please export as JPG or PNG.");
+      }
 
       // Accept if mime is image/* OR extension looks like image
-      const looksImage = mime.startsWith("image/") || ["png", "jpg", "jpeg", "webp"].includes(ext);
+      const looksImage =
+        mime.startsWith("image/") || ["png", "jpg", "jpeg", "webp"].includes(extNorm);
 
       if (!looksImage) {
         throw new Error(
@@ -248,15 +282,14 @@ export function useVehicles() {
         );
       }
 
-      // Block HEIC/HEIF explicitly
-      if (mime.includes("heic") || mime.includes("heif") || ext === "heic" || ext === "heif") {
-        throw new Error("HEIC/HEIF isn’t supported yet. Please export as JPG or PNG.");
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("Max 5MB image size.");
       }
 
-      // Final extension decision
+      // Decide final extension
       const allowedExt = new Set(["png", "jpg", "webp"]);
-      const finalExt = allowedExt.has(ext)
-        ? ext
+      const finalExt = allowedExt.has(extNorm)
+        ? extNorm
         : mime.includes("png")
         ? "png"
         : mime.includes("webp")
@@ -265,8 +298,12 @@ export function useVehicles() {
 
       const contentType = guessContentType(file, finalExt);
 
-      const vrm = cleanVrm(registrationNumber) || "VEHICLE";
-      const path = `${user.id}/${vrm}.${finalExt}`;
+      // Path strategy:
+      // - If we have a vehicleId: userId/vehicleId/timestamp.ext
+      // - Else fallback to VRM: userId/VRM.ext (upsert=true)
+      const path = vehicleId
+        ? `${user.id}/${vehicleId}/${Date.now()}.${finalExt}`
+        : `${user.id}/${(vrm || "VEHICLE")}.${finalExt}`;
 
       const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
         upsert: true,
