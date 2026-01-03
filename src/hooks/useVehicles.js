@@ -15,12 +15,42 @@ const MOCK_DVLA_DATA = {
   },
 };
 
+function cleanVrm(v) {
+  return String(v || "").replace(/\s+/g, "").toUpperCase();
+}
+
+function guessExt(file) {
+  const name = String(file?.name || "").toLowerCase();
+  const m = name.match(/\.([a-z0-9]+)$/i);
+  if (m?.[1]) return m[1];
+
+  const mime = String(file?.type || "").toLowerCase();
+  if (mime === "image/png") return "png";
+  if (mime === "image/jpeg" || mime === "image/jpg") return "jpg";
+  if (mime === "image/webp") return "webp";
+  if (mime === "image/heic" || mime === "image/heif") return "heic";
+  return "";
+}
+
+function guessContentType(file, ext) {
+  const mime = String(file?.type || "").toLowerCase();
+  if (mime.startsWith("image/")) return mime;
+
+  if (ext === "png") return "image/png";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "webp") return "image/webp";
+  return "application/octet-stream";
+}
+
 function toDb(vehicle, userId) {
+  // Accept both camelCase + snake_case (your form uses photo_url/photo_path)
+  const photoUrl = vehicle.photoUrl ?? vehicle.photo_url ?? "";
+  const photoPath = vehicle.photoPath ?? vehicle.photo_path ?? "";
+
   return {
     user_id: userId,
 
-    registration_number:
-      vehicle.registrationNumber?.replace(/\s+/g, "").toUpperCase() || "",
+    registration_number: cleanVrm(vehicle.registrationNumber) || "",
     nickname: vehicle.nickname || "",
 
     make: vehicle.make || "",
@@ -38,17 +68,15 @@ function toDb(vehicle, userId) {
     mot_expiry: vehicle.motExpiry || null,
     tax_expiry: vehicle.isSorn ? null : vehicle.taxExpiry || null,
     insurance_expiry: vehicle.isUninsured ? null : vehicle.insuranceExpiry || null,
-    insurance_policy_number: vehicle.isUninsured
-      ? null
-      : vehicle.insurancePolicyNumber || null,
+    insurance_policy_number: vehicle.isUninsured ? null : vehicle.insurancePolicyNumber || null,
 
     is_uninsured: !!vehicle.isUninsured,
     is_sorn: !!vehicle.isSorn,
     service_date: vehicle.serviceDate || null,
 
     // ✅ Photos
-    photo_url: vehicle.photoUrl || null,
-    photo_path: vehicle.photoPath || null,
+    photo_url: photoUrl || null,
+    photo_path: photoPath || null,
 
     updated_at: new Date().toISOString(),
   };
@@ -90,8 +118,6 @@ export function useVehicles() {
   const [loadingVehicles, setLoadingVehicles] = useState(false);
 
   const TABLE = "vehicles";
-
-  // ✅ Change if you named the bucket differently
   const BUCKET = "vehicle-photos";
 
   const refresh = useCallback(async () => {
@@ -105,8 +131,8 @@ export function useVehicles() {
       .order("created_at", { ascending: false });
 
     setLoadingVehicles(false);
-
     if (error) throw error;
+
     setVehicles((data || []).map(fromDb));
   }, [user?.id]);
 
@@ -172,7 +198,6 @@ export function useVehicles() {
     async (id) => {
       if (!user?.id) throw new Error("Not logged in.");
 
-      // Optional: if you want auto-delete photo when deleting vehicle
       const existing = vehicles.find((v) => String(v.id) === String(id));
       if (existing?.photoPath) {
         await supabase.storage.from(BUCKET).remove([existing.photoPath]);
@@ -191,110 +216,72 @@ export function useVehicles() {
     [user?.id, vehicles]
   );
 
-  // ✅ DVLA lookup via Vercel API route
   const lookupDVLA = useCallback(async (registrationNumber) => {
-    const clean = String(registrationNumber || "")
-      .replace(/\s+/g, "")
-      .toUpperCase();
+    const clean = cleanVrm(registrationNumber);
     if (!clean) return null;
 
     try {
       const res = await fetch(`/api/dvla/${clean}`);
       if (!res.ok) return null;
       return await res.json();
-    } catch (err) {
+    } catch {
       return MOCK_DVLA_DATA[clean] || null;
     }
   }, []);
 
-  // ============================
-  // ✅ Vehicle Photos (Supabase Storage)
-  // ============================
-
+  // ✅ Signature matches your VehicleForm: uploadVehiclePhoto(file, registrationNumber)
   const uploadVehiclePhoto = useCallback(
-    async (vehicleId, file) => {
+    async (file, registrationNumber) => {
       if (!user?.id) throw new Error("Not logged in.");
-      if (!vehicleId) throw new Error("vehicleId is required.");
       if (!file) throw new Error("No file provided.");
 
-      // Basic file validation
-      const allowed = ["image/jpeg", "image/png", "image/webp"];
-      if (!allowed.includes(file.type)) {
-        throw new Error("Please upload a JPG, PNG, or WEBP image.");
+      const mime = String(file.type || "").toLowerCase();
+      const extRaw = guessExt(file);
+      const ext = extRaw === "jpeg" ? "jpg" : extRaw;
+
+      // Accept if mime is image/* OR extension looks like image
+      const looksImage = mime.startsWith("image/") || ["png", "jpg", "jpeg", "webp"].includes(ext);
+
+      if (!looksImage) {
+        throw new Error(
+          `Please upload a JPG, PNG, or WEBP image. (Got: name="${file?.name}", type="${file?.type}")`
+        );
       }
 
-      // Create a stable path: userId/vehicleId/timestamp.ext
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-      const safeExt = ext.replace(/[^a-z0-9]/g, "") || "jpg";
-      const path = `${user.id}/${vehicleId}/${Date.now()}.${safeExt}`;
+      // Block HEIC/HEIF explicitly
+      if (mime.includes("heic") || mime.includes("heif") || ext === "heic" || ext === "heif") {
+        throw new Error("HEIC/HEIF isn’t supported yet. Please export as JPG or PNG.");
+      }
 
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, file, {
-          upsert: true,
-          contentType: file.type,
-          cacheControl: "3600",
-        });
+      // Final extension decision
+      const allowedExt = new Set(["png", "jpg", "webp"]);
+      const finalExt = allowedExt.has(ext)
+        ? ext
+        : mime.includes("png")
+        ? "png"
+        : mime.includes("webp")
+        ? "webp"
+        : "jpg";
+
+      const contentType = guessContentType(file, finalExt);
+
+      const vrm = cleanVrm(registrationNumber) || "VEHICLE";
+      const path = `${user.id}/${vrm}.${finalExt}`;
+
+      const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
+        upsert: true,
+        contentType,
+        cacheControl: "3600",
+      });
 
       if (uploadError) throw uploadError;
 
       const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
-      const publicUrl = pub?.publicUrl;
-
-      if (!publicUrl) {
-        throw new Error("Failed to generate public URL for uploaded image.");
-      }
+      const publicUrl = pub?.publicUrl || "";
 
       return { photoUrl: publicUrl, photoPath: path };
     },
     [user?.id]
-  );
-
-  const removeVehiclePhoto = useCallback(
-    async (vehicleId) => {
-      if (!user?.id) throw new Error("Not logged in.");
-      if (!vehicleId) throw new Error("vehicleId is required.");
-
-      const current = vehicles.find((v) => String(v.id) === String(vehicleId));
-      if (!current) throw new Error("Vehicle not found.");
-      if (!current.photoPath) {
-        // nothing to remove, still update db to nulls for safety
-        await updateVehicle(vehicleId, { photoUrl: "", photoPath: "" });
-        return;
-      }
-
-      await supabase.storage.from(BUCKET).remove([current.photoPath]);
-
-      // Clear in DB
-      await updateVehicle(vehicleId, { photoUrl: "", photoPath: "" });
-    },
-    [user?.id, vehicles, updateVehicle]
-  );
-
-  // One-call helper: upload + update DB (and cleanup old image)
-  const setVehiclePhotoFromFile = useCallback(
-    async (vehicleId, file) => {
-      if (!user?.id) throw new Error("Not logged in.");
-      const current = vehicles.find((v) => String(v.id) === String(vehicleId));
-
-      // Upload new
-      const uploaded = await uploadVehiclePhoto(vehicleId, file);
-
-      // Update DB first (so UI gets it immediately)
-      await updateVehicle(vehicleId, {
-        photoUrl: uploaded.photoUrl,
-        photoPath: uploaded.photoPath,
-      });
-
-      // Then cleanup old file (optional but recommended)
-      const oldPath = current?.photoPath;
-      if (oldPath && oldPath !== uploaded.photoPath) {
-        await supabase.storage.from(BUCKET).remove([oldPath]);
-      }
-
-      return uploaded;
-    },
-    [user?.id, vehicles, uploadVehiclePhoto, updateVehicle]
   );
 
   return {
@@ -308,7 +295,5 @@ export function useVehicles() {
 
     // ✅ photos
     uploadVehiclePhoto,
-    removeVehiclePhoto,
-    setVehiclePhotoFromFile,
   };
 }
