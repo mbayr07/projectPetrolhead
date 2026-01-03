@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -25,6 +25,15 @@ export default function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // ✅ Lock body scroll (prevents background scroll + tiny jumps when dialogs open)
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
   const tabs = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: FileText, label: "Docs", path: "/documents" },
@@ -33,35 +42,40 @@ export default function Layout({ children }) {
     { icon: User, label: "Profile", path: "/profile" },
   ];
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await logout?.();
+    } finally {
+      navigate("/login");
+    }
   };
 
   const getInitials = (name) => {
-    return name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "U";
+    return (
+      name?.split(" ")
+        .map((n) => n?.[0])
+        .join("")
+        .toUpperCase() || "U"
+    );
   };
 
   const isActive = (path) => {
     if (path === "/dashboard") {
-      return (
-        location.pathname === "/dashboard" ||
-        location.pathname.startsWith("/vehicle/")
-      );
+      return location.pathname === "/dashboard" || location.pathname.startsWith("/vehicle/");
     }
     return location.pathname === path || location.pathname.startsWith(path + "/");
   };
 
   return (
-    // ✅ App-like shell: header + scrollable content + bottom nav anchored
-    <div className="h-full bg-background text-foreground flex flex-col">
-      {/* Top Bar (anchored) */}
+    // ✅ "App shell": fixed viewport, only <main> scrolls.
+    <div className="h-[100dvh] bg-background text-foreground flex flex-col overflow-hidden">
+      {/* Top Bar */}
       <header className="h-14 shrink-0 bg-card border-b border-border flex items-center px-4">
-        <Link to="/dashboard" className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+        <Link to="/dashboard" className="flex items-center gap-2 min-w-0">
+          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shrink-0">
             <Car className="h-5 w-5 text-white" />
           </div>
-          <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
             AutoMateAI
           </span>
         </Link>
@@ -72,12 +86,15 @@ export default function Layout({ children }) {
               <Button variant="ghost" className="h-10 px-2 gap-2">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-white">
-                    {getInitials(user?.name)}
+                    {getInitials(user?.name || user?.user_metadata?.name)}
                   </AvatarFallback>
                 </Avatar>
-                <span className="text-sm">{user?.name || "User"}</span>
+                <span className="text-sm max-w-[140px] truncate">
+                  {user?.name || user?.user_metadata?.name || "User"}
+                </span>
               </Button>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem onClick={() => navigate("/profile")}>
                 <User className="mr-2 h-4 w-4" />
@@ -92,14 +109,14 @@ export default function Layout({ children }) {
         </div>
       </header>
 
-      {/* Scrollable Content (ONLY this scrolls) */}
+      {/* ✅ Only this scrolls */}
       <main className="flex-1 overflow-y-auto overscroll-contain">
         <div className="p-4 pb-6">{children}</div>
         {/* spacer so last content never kisses the bottom nav */}
         <div className="h-4" />
       </main>
 
-      {/* Bottom Nav (anchored) */}
+      {/* Bottom Nav */}
       <nav className="shrink-0 bg-card border-t border-border pb-[env(safe-area-inset-bottom)]">
         <div className="px-2">
           <div className="h-[64px] flex items-center justify-between">
@@ -108,12 +125,7 @@ export default function Layout({ children }) {
               const active = isActive(tab.path);
 
               return (
-                <Link
-                  key={tab.path}
-                  to={tab.path}
-                  className="flex-1"
-                  aria-label={tab.label}
-                >
+                <Link key={tab.path} to={tab.path} className="flex-1" aria-label={tab.label}>
                   <motion.div
                     whileTap={{ scale: 0.97 }}
                     className={`mx-1 rounded-xl px-2 py-2 flex flex-col items-center justify-center gap-1 transition-colors ${
@@ -123,9 +135,7 @@ export default function Layout({ children }) {
                     }`}
                   >
                     <Icon className="h-5 w-5" />
-                    <span className="text-[11px] font-medium leading-none">
-                      {tab.label}
-                    </span>
+                    <span className="text-[11px] font-medium leading-none">{tab.label}</span>
                   </motion.div>
                 </Link>
               );

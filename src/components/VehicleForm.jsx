@@ -261,14 +261,26 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6"
+      onKeyDown={(e) => {
+        // ✅ Prevent accidental submit / scroll jump on Enter inside inputs (feels more “app-like”)
+        if (e.key === "Enter" && e.target?.tagName === "INPUT") {
+          const type = e.target.getAttribute?.("type");
+          if (type !== "submit") e.preventDefault();
+        }
+      }}
+    >
       <div className="space-y-4">
         {/* Photo */}
         <div className="rounded-xl border border-border bg-card/40 p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-1">
               <Label>Vehicle photo</Label>
-              <p className="text-xs text-muted-foreground">Optional. If not uploaded, we’ll keep the logo.</p>
+              <p className="text-xs text-muted-foreground">
+                Optional. If not uploaded, we’ll keep the logo.
+              </p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -287,7 +299,8 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
                 </div>
               )}
 
-              <label className="cursor-pointer">
+              {/* ✅ data-filepicker helps your Dialog ignore outside-click logic for file picking */}
+              <label className="cursor-pointer" data-filepicker>
                 {/* IMPORTANT: no name attribute + no generic handleChange */}
                 <input
                   type="file"
@@ -327,23 +340,48 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
 
         <div>
           <Label htmlFor="nickname">Nickname</Label>
-          <Input id="nickname" name="nickname" value={formData.nickname} onChange={handleChange} placeholder="e.g., My M3" required />
+          <Input
+            id="nickname"
+            name="nickname"
+            value={formData.nickname}
+            onChange={handleChange}
+            placeholder="e.g., My M3"
+            required
+          />
         </div>
 
         {/* SORN */}
         <div className="flex items-start gap-3 rounded-xl border border-border bg-card/40 p-4">
-          <input id="isSorn" name="isSorn" type="checkbox" checked={!!formData.isSorn} onChange={handleChange} className="mt-1 h-4 w-4 accent-primary" />
+          <input
+            id="isSorn"
+            name="isSorn"
+            type="checkbox"
+            checked={!!formData.isSorn}
+            onChange={handleChange}
+            className="mt-1 h-4 w-4 accent-primary"
+          />
           <div className="space-y-1">
-            <Label htmlFor="isSorn" className="cursor-pointer">Currently SORN</Label>
+            <Label htmlFor="isSorn" className="cursor-pointer">
+              Currently SORN
+            </Label>
             <p className="text-xs text-muted-foreground">If ticked, Tax date becomes “not applicable”.</p>
           </div>
         </div>
 
         {/* Uninsured */}
         <div className="flex items-start gap-3 rounded-xl border border-border bg-card/40 p-4">
-          <input id="isUninsured" name="isUninsured" type="checkbox" checked={!!formData.isUninsured} onChange={handleChange} className="mt-1 h-4 w-4 accent-primary" />
+          <input
+            id="isUninsured"
+            name="isUninsured"
+            type="checkbox"
+            checked={!!formData.isUninsured}
+            onChange={handleChange}
+            className="mt-1 h-4 w-4 accent-primary"
+          />
           <div className="space-y-1">
-            <Label htmlFor="isUninsured" className="cursor-pointer">Currently not insured</Label>
+            <Label htmlFor="isUninsured" className="cursor-pointer">
+              Currently not insured
+            </Label>
             <p className="text-xs text-muted-foreground">If ticked, Insurance date & policy number become “not applicable”.</p>
           </div>
         </div>
@@ -362,10 +400,30 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
         <InputField label="Mileage" name="mileage" type="number" value={formData.mileage} onChange={handleChange} />
 
         <DateField label="MOT Expiry" name="motExpiry" value={formData.motExpiry} onChange={handleChange} />
-        <DateField label="Tax Expiry" name="taxExpiry" value={formData.taxExpiry} onChange={handleChange} disabled={!!formData.isSorn} hint={formData.isSorn ? "Not applicable while SORN." : undefined} />
-        <DateField label="Insurance Expiry" name="insuranceExpiry" value={formData.insuranceExpiry} onChange={handleChange} disabled={!!formData.isUninsured} hint={formData.isUninsured ? "Not applicable while not insured." : undefined} />
+        <DateField
+          label="Tax Expiry"
+          name="taxExpiry"
+          value={formData.taxExpiry}
+          onChange={handleChange}
+          disabled={!!formData.isSorn}
+          hint={formData.isSorn ? "Not applicable while SORN." : undefined}
+        />
+        <DateField
+          label="Insurance Expiry"
+          name="insuranceExpiry"
+          value={formData.insuranceExpiry}
+          onChange={handleChange}
+          disabled={!!formData.isUninsured}
+          hint={formData.isUninsured ? "Not applicable while not insured." : undefined}
+        />
 
-        <InputField label="Insurance Policy Number" name="insurancePolicyNumber" value={formData.insurancePolicyNumber} onChange={handleChange} disabled={!!formData.isUninsured} />
+        <InputField
+          label="Insurance Policy Number"
+          name="insurancePolicyNumber"
+          value={formData.insurancePolicyNumber}
+          onChange={handleChange}
+          disabled={!!formData.isUninsured}
+        />
         <DateField label="Last Service" name="serviceDate" value={formData.serviceDate} onChange={handleChange} />
       </div>
 

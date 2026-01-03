@@ -51,10 +51,10 @@ export default function VehicleCard({ vehicle }) {
 
   return (
     <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={{ scale: 1.015 }}
+      whileTap={{ scale: 0.995 }}
       onClick={() => navigate(`/vehicle/${vehicle.id}`)}
-      className="bg-card border border-border rounded-xl p-6 cursor-pointer relative overflow-hidden group"
+      className="bg-card border border-border rounded-xl p-6 cursor-pointer relative overflow-hidden group transform-gpu will-change-transform"
     >
       <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-full blur-3xl -mr-16 -mt-16" />
 
@@ -63,13 +63,14 @@ export default function VehicleCard({ vehicle }) {
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             {/* Vehicle image / fallback icon */}
-            <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted flex items-center justify-center shrink-0">
+            <div className="h-12 w-12 rounded-lg overflow-hidden border border-border bg-muted flex items-center justify-center shrink-0">
               {vehicle.photoUrl ? (
                 <img
                   src={vehicle.photoUrl}
                   alt={vehicle.nickname}
                   className="h-full w-full object-cover"
                   loading="lazy"
+                  draggable={false}
                 />
               ) : (
                 <div className="h-full w-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
@@ -78,9 +79,9 @@ export default function VehicleCard({ vehicle }) {
               )}
             </div>
 
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-bold text-lg">{vehicle.nickname}</h3>
+                <h3 className="font-bold text-lg truncate">{vehicle.nickname}</h3>
 
                 {vehicle.isSorn && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-500 font-semibold">
@@ -95,13 +96,13 @@ export default function VehicleCard({ vehicle }) {
                 )}
               </div>
 
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground truncate">
                 {vehicle.registrationNumber}
               </p>
             </div>
           </div>
 
-          <StatusIcon className={`h-6 w-6 ${color}`} />
+          <StatusIcon className={`h-6 w-6 ${color} warning-light`} />
         </div>
 
         {/* Dates grid */}

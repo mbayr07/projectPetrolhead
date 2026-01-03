@@ -129,6 +129,10 @@ export default function Dashboard() {
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent
           className="max-w-[420px] max-h-[90vh] overflow-y-auto"
+          // ✅ STOP the “jump/scroll-to-input” behaviour when dialog opens/closes
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          // ✅ Keep your file-picker protection
           onInteractOutside={(e) => {
             const t = e.target;
             if (t?.closest?.("[data-filepicker]") || t?.closest?.('input[type="file"]')) {

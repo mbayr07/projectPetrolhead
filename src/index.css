@@ -31,13 +31,53 @@
   * {
     @apply border-border;
   }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  html {
+    /* Prevent iOS "auto text scaling" weirdness */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+
+    /* Prevent layout shift when scrollbar appears/disappears */
+    scrollbar-gutter: stable both-edges;
+  }
+
   body {
     @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+      "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+
+    /* Make scrolling feel more "app-like" */
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ✅ BIG ONE: stops iOS Safari zooming into inputs */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Better tap feel on mobile */
+  button,
+  a,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Nicer focus (works well with shadcn) */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.25);
   }
 }
 
@@ -45,15 +85,15 @@
   .gauge-gradient {
     background: linear-gradient(90deg, #ef4444 0%, #f59e0b 50%, #10b981 100%);
   }
-  
+
   .chrome-gradient {
     background: linear-gradient(135deg, #d4d4d8 0%, #a1a1aa 50%, #d4d4d8 100%);
   }
-  
+
   .racing-red {
     color: #ef4444;
   }
-  
+
   .electric-blue {
     color: #0ea5e9;
   }
@@ -64,7 +104,8 @@
 }
 
 @keyframes pulse-warning {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
