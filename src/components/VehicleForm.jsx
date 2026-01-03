@@ -7,6 +7,30 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { useVehicles } from "@/hooks/useVehicles";
 
+// ✅ Robust image validation (fixes PNGs coming through with empty/odd MIME types)
+function isAllowedImage(file) {
+  if (!file) return false;
+
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+
+  const allowedMime = new Set([
+    "image/png",
+    "image/x-png",
+    "image/jpeg",
+    "image/jpg",
+    "image/webp",
+    "application/octet-stream", // some browsers / iOS
+    "", // sometimes empty
+  ]);
+
+  const allowedExt = [".png", ".jpg", ".jpeg", ".webp"];
+  const hasAllowedExt = allowedExt.some((ext) => name.endsWith(ext));
+
+  // If mime is missing/odd, extension check saves us
+  return allowedMime.has(mime) || hasAllowedExt;
+}
+
 export default function VehicleForm({ onSuccess, initialData = null }) {
   const { addVehicle, updateVehicle, lookupDVLA, uploadVehiclePhoto } = useVehicles();
   const { toast } = useToast();
@@ -64,15 +88,23 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // basic checks
-    if (!file.type.startsWith("image/")) {
-      toast({ title: "Invalid file", description: "Please upload an image.", variant: "destructive" });
+    // ✅ improved type checks (MIME OR extension)
+    if (!isAllowedImage(file)) {
+      toast({
+        title: "Unsupported file type",
+        description: "Please upload a JPG, PNG, or WEBP image.",
+        variant: "destructive",
+      });
       return;
     }
+
     if (file.size > 5 * 1024 * 1024) {
       toast({ title: "Too large", description: "Max 5MB image size.", variant: "destructive" });
       return;
     }
+
+    // clear previous blob to avoid memory leak
+    if (photoPreview && photoFile) URL.revokeObjectURL(photoPreview);
 
     setPhotoFile(file);
     const url = URL.createObjectURL(file);
@@ -232,11 +264,7 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
               {photoPreview ? (
                 <>
                   <div className="h-12 w-12 rounded-lg overflow-hidden border border-border">
-                    <img
-                      src={photoPreview}
-                      alt="Vehicle"
-                      className="h-full w-full object-cover"
-                    />
+                    <img src={photoPreview} alt="Vehicle" className="h-full w-full object-cover" />
                   </div>
                   <Button type="button" variant="outline" size="icon" onClick={clearPhoto}>
                     <X className="h-4 w-4" />
@@ -251,7 +279,7 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
               <label className="cursor-pointer">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
                   className="hidden"
                   onChange={handlePhotoChange}
                 />
