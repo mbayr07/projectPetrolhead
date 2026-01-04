@@ -19,6 +19,9 @@ import Reminders from "@/pages/Reminders";
 import Reports from "@/pages/Reports";
 import Profile from "@/pages/Profile";
 
+// ✅ NEW
+import Crash from "@/pages/Crash";
+
 function PrivateRoute({ children }) {
   const { user } = useAuth();
   return user ? children : <Navigate to="/login" replace />;
@@ -84,6 +87,7 @@ export default function App() {
                   </PublicRoute>
                 }
               />
+
               <Route
                 path="/dashboard"
                 element={
@@ -108,6 +112,17 @@ export default function App() {
                   </PrivateRoute>
                 }
               />
+
+              {/* ✅ NEW: Crash flow */}
+              <Route
+                path="/crash"
+                element={
+                  <PrivateRoute>
+                    <Crash />
+                  </PrivateRoute>
+                }
+              />
+
               <Route
                 path="/reminders"
                 element={
@@ -132,7 +147,9 @@ export default function App() {
                   </PrivateRoute>
                 }
               />
+
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
 
             <Toaster />

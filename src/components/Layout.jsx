@@ -1,4 +1,5 @@
-import React, { useEffect } from "react";
+// src/components/Layout.jsx
+import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -9,6 +10,7 @@ import {
   User,
   LogOut,
   Car,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -25,38 +27,22 @@ export default function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ✅ Lock body scroll (prevents background scroll + tiny jumps when dialogs open)
-  useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  }, []);
-
   const tabs = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: FileText, label: "Docs", path: "/documents" },
+    { icon: AlertTriangle, label: "Crash", path: "/crash", danger: true },
     { icon: Bell, label: "Reminders", path: "/reminders" },
     { icon: BarChart3, label: "Reports", path: "/reports" },
     { icon: User, label: "Profile", path: "/profile" },
   ];
 
-  const handleLogout = async () => {
-    try {
-      await logout?.();
-    } finally {
-      navigate("/login");
-    }
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
   };
 
   const getInitials = (name) => {
-    return (
-      name?.split(" ")
-        .map((n) => n?.[0])
-        .join("")
-        .toUpperCase() || "U"
-    );
+    return name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "U";
   };
 
   const isActive = (path) => {
@@ -67,15 +53,14 @@ export default function Layout({ children }) {
   };
 
   return (
-    // ✅ "App shell": fixed viewport, only <main> scrolls.
-    <div className="h-[100dvh] bg-background text-foreground flex flex-col overflow-hidden">
+    <div className="h-full bg-background text-foreground flex flex-col">
       {/* Top Bar */}
       <header className="h-14 shrink-0 bg-card border-b border-border flex items-center px-4">
-        <Link to="/dashboard" className="flex items-center gap-2 min-w-0">
-          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shrink-0">
+        <Link to="/dashboard" className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
             <Car className="h-5 w-5 text-white" />
           </div>
-          <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
+          <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             AutoMateAI
           </span>
         </Link>
@@ -86,15 +71,12 @@ export default function Layout({ children }) {
               <Button variant="ghost" className="h-10 px-2 gap-2">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-white">
-                    {getInitials(user?.name || user?.user_metadata?.name)}
+                    {getInitials(user?.name)}
                   </AvatarFallback>
                 </Avatar>
-                <span className="text-sm max-w-[140px] truncate">
-                  {user?.name || user?.user_metadata?.name || "User"}
-                </span>
+                <span className="text-sm">{user?.name || "User"}</span>
               </Button>
             </DropdownMenuTrigger>
-
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem onClick={() => navigate("/profile")}>
                 <User className="mr-2 h-4 w-4" />
@@ -109,10 +91,9 @@ export default function Layout({ children }) {
         </div>
       </header>
 
-      {/* ✅ Only this scrolls */}
+      {/* Scrollable Content */}
       <main className="flex-1 overflow-y-auto overscroll-contain">
         <div className="p-4 pb-6">{children}</div>
-        {/* spacer so last content never kisses the bottom nav */}
         <div className="h-4" />
       </main>
 
@@ -124,12 +105,20 @@ export default function Layout({ children }) {
               const Icon = tab.icon;
               const active = isActive(tab.path);
 
+              // ✅ Special “Crash” styling
+              const dangerIdle = "bg-red-500/10 text-red-300 border border-red-500/25 hover:bg-red-500/15";
+              const dangerActive = "bg-red-500/20 text-red-200 border border-red-500/40";
+
               return (
                 <Link key={tab.path} to={tab.path} className="flex-1" aria-label={tab.label}>
                   <motion.div
                     whileTap={{ scale: 0.97 }}
                     className={`mx-1 rounded-xl px-2 py-2 flex flex-col items-center justify-center gap-1 transition-colors ${
-                      active
+                      tab.danger
+                        ? active
+                          ? dangerActive
+                          : dangerIdle
+                        : active
                         ? "bg-gradient-to-r from-primary/20 to-secondary/20 text-primary border border-primary/30"
                         : "text-muted-foreground hover:bg-muted"
                     }`}
