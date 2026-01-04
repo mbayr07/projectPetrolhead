@@ -1,5 +1,5 @@
 // src/pages/Crash.jsx
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Helmet } from "react-helmet";
 import {
   AlertTriangle,
@@ -13,13 +13,26 @@ import {
   Save,
   FileText,
   Image as ImageIcon,
+  Plus,
+  Loader2,
+  X,
 } from "lucide-react";
+
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { useCrashReports } from "@/hooks/useCrashReports";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function nowIso() {
   return new Date().toISOString();
@@ -37,7 +50,7 @@ function niceDateTime(iso) {
       minute: "2-digit",
     });
   } catch {
-    return iso;
+    return String(iso || "");
   }
 }
 
@@ -48,35 +61,33 @@ function safeText(s) {
 function buildShareText(my, other, meta) {
   const lines = [];
   lines.push("AutoMateAI Crash Details");
-  lines.push(`Date/time: ${niceDateTime(meta.started_at)}`);
+  lines.push(`Date/time: ${niceDateTime(meta.occurred_at || meta.created_at || meta.started_at)}`);
+
   if (meta.location?.lat && meta.location?.lng) {
     lines.push(`Location: ${meta.location.lat}, ${meta.location.lng}`);
     if (meta.location?.mapsUrl) lines.push(`Maps: ${meta.location.mapsUrl}`);
+  } else if (meta.location_text) {
+    lines.push(`Location: ${meta.location_text}`);
   }
+
   lines.push("");
   lines.push("My details:");
   lines.push(`Name: ${my.name || "—"}`);
   lines.push(`Phone: ${my.phone || "—"}`);
   lines.push(`Vehicle reg: ${my.vrm || "—"}`);
-  lines.push(
-    `Make/model/colour: ${
-      [my.makeModel, my.colour].filter(Boolean).join(" / ") || "—"
-    }`
-  );
+  lines.push(`Make/model/colour: ${[my.makeModel, my.colour].filter(Boolean).join(" / ") || "—"}`);
   lines.push(`Insurer: ${my.insurer || "—"}`);
   lines.push(`Policy no: ${my.policy || "—"}`);
+
   lines.push("");
   lines.push("Other driver details:");
   lines.push(`Name: ${other.name || "—"}`);
   lines.push(`Phone: ${other.phone || "—"}`);
   lines.push(`Vehicle reg: ${other.vrm || "—"}`);
-  lines.push(
-    `Make/model/colour: ${
-      [other.makeModel, other.colour].filter(Boolean).join(" / ") || "—"
-    }`
-  );
+  lines.push(`Make/model/colour: ${[other.makeModel, other.colour].filter(Boolean).join(" / ") || "—"}`);
   lines.push(`Insurer: ${other.insurer || "—"}`);
   lines.push(`Policy no: ${other.policy || "—"}`);
+
   lines.push("");
   lines.push("Notes:");
   lines.push(meta.notes || "—");
@@ -138,27 +149,32 @@ const STEPS = [
 export default function Crash() {
   const { toast } = useToast();
   const { user } = useAuth();
-
-  const DRAFT_KEY = useMemo(
-    () =>
-      user?.id
-        ? `automateai_crash_draft_${user.id}`
-        : "automateai_crash_draft",
-    [user?.id]
-  );
-  const MY_KEY = useMemo(
-    () =>
-      user?.id ? `automateai_my_details_${user.id}` : "automateai_my_details",
-    [user?.id]
-  );
-
-  const [startedAt] = useState(() => nowIso());
-  const [stepIndex, setStepIndex] = useState(0);
-
-  const [isSafe, setIsSafe] = useState(null); // null | true | false
-  const [needsHelp, setNeedsHelp] = useState(false);
-
   const loc = useGeolocationOnce(true);
+
+  const {
+    reports,
+    loadingReports,
+    refreshReports,
+    createCrashReport,
+    updateCrashReport,
+    uploadCrashPhoto,
+    listCrashPhotos,
+    getCrashPhotoSignedUrl,
+  } = useCrashReports();
+
+  const MY_KEY = useMemo(
+    () => (user?.id ? `automateai_my_details_${user.id}` : "automateai_my_details"),
+    [user?.id]
+  );
+
+  // Active report id (Supabase row id)
+  const [activeReportId, setActiveReportId] = useState("");
+
+  // Stepper + local UI state (we save to DB on “Save”)
+  const [stepIndex, setStepIndex] = useState(0);
+  const [isSafe, setIsSafe] = useState(null);
+  const [needsHelp, setNeedsHelp] = useState(false);
+  const [notes, setNotes] = useState("");
 
   const [my, setMy] = useState(() => {
     try {
@@ -186,65 +202,126 @@ export default function Crash() {
     policy: "",
   }));
 
-  const [notes, setNotes] = useState("");
-  const [photos, setPhotos] = useState([]); // { id, file, url, name, size }
-  const [savingDraft, setSavingDraft] = useState(false);
+  // Photo previews coming from Supabase (signed URLs)
+  // { id, path, url, file_name, created_at }
+  const [photos, setPhotos] = useState([]);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const takeInputRef = useRef(null);
   const chooseInputRef = useRef(null);
 
-  // Load draft
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      const d = JSON.parse(raw);
-
-      if (typeof d.stepIndex === "number") setStepIndex(d.stepIndex);
-      if (typeof d.isSafe === "boolean") setIsSafe(d.isSafe);
-      if (typeof d.needsHelp === "boolean") setNeedsHelp(d.needsHelp);
-      if (d.my) setMy((p) => ({ ...p, ...d.my }));
-      if (d.other) setOther((p) => ({ ...p, ...d.other }));
-      if (typeof d.notes === "string") setNotes(d.notes);
-
-      toast({
-        title: "Draft restored",
-        description: "We restored your crash checklist draft (photos need re-adding).",
-      });
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Persist draft frequently (without files)
-  useEffect(() => {
-    const draft = {
-      started_at: startedAt,
-      stepIndex,
-      isSafe,
-      needsHelp,
-      my,
-      other,
-      notes,
-    };
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-    } catch {}
-  }, [DRAFT_KEY, startedAt, stepIndex, isSafe, needsHelp, my, other, notes]);
-
-  // Cleanup blob URLs
-  useEffect(() => {
-    return () => {
-      photos.forEach((p) => {
-        if (p?.url?.startsWith("blob:")) URL.revokeObjectURL(p.url);
-      });
-    };
-  }, [photos]);
-
   const step = STEPS[stepIndex];
   const progressPct = Math.round(((stepIndex + 1) / STEPS.length) * 100);
-
   const goNext = () => setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
   const goBack = () => setStepIndex((i) => Math.max(i - 1, 0));
+
+  // pick default active report once reports load
+  useEffect(() => {
+    if (!user?.id) return;
+    if (loadingReports) return;
+
+    if (reports?.length && !activeReportId) {
+      setActiveReportId(String(reports[0].id));
+    }
+  }, [user?.id, loadingReports, reports, activeReportId]);
+
+  const loadReportIntoState = async (reportId) => {
+    const r = reports.find((x) => String(x.id) === String(reportId));
+    if (!r) return;
+
+    setStepIndex(r?.extras?.stepIndex ?? 0);
+    setIsSafe(typeof r?.extras?.isSafe === "boolean" ? r.extras.isSafe : null);
+    setNeedsHelp(!!(r?.extras?.needsHelp));
+    setNotes(r?.notes ?? "");
+
+    setMy((prev) => ({ ...prev, ...(r?.my_details || {}) }));
+    setOther((prev) => ({ ...prev, ...(r?.other_details || {}) }));
+
+    // photos
+    setLoadingPhotos(true);
+    try {
+      const rows = await listCrashPhotos(r.id);
+      const withUrls = await Promise.all(
+        (rows || []).map(async (p) => {
+          const url = await getCrashPhotoSignedUrl(p.path, 60 * 10);
+          return {
+            id: p.id,
+            path: p.path,
+            url,
+            file_name: p.file_name,
+            created_at: p.created_at,
+          };
+        })
+      );
+      setPhotos(withUrls);
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: "Failed to load photos",
+        description: String(e?.message || e),
+        variant: "destructive",
+      });
+      setPhotos([]);
+    } finally {
+      setLoadingPhotos(false);
+    }
+  };
+
+  // When active report changes, load its content + photos
+  useEffect(() => {
+    if (!activeReportId) return;
+    loadReportIntoState(activeReportId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeReportId]);
+
+  const startNewCrash = async () => {
+    try {
+      const payload = {
+        title: `Crash report • ${new Date().toLocaleDateString("en-GB")}`,
+        notes: "",
+        occurred_at: nowIso(),
+        location_text: null,
+        lat: loc.status === "ok" ? loc.lat : null,
+        lng: loc.status === "ok" ? loc.lng : null,
+        is_injuries: false,
+        called_999: false,
+        my_details: my || {},
+        other_details: {},
+        extras: { stepIndex: 0, isSafe: null, needsHelp: false },
+      };
+
+      const created = await createCrashReport(payload);
+      await refreshReports();
+
+      setActiveReportId(String(created.id));
+
+      // reset UI state
+      setStepIndex(0);
+      setIsSafe(null);
+      setNeedsHelp(false);
+      setOther({
+        name: "",
+        phone: "",
+        vrm: "",
+        makeModel: "",
+        colour: "",
+        insurer: "",
+        policy: "",
+      });
+      setNotes("");
+      setPhotos([]);
+
+      toast({ title: "New crash started", description: "Created a new crash report." });
+    } catch (e) {
+      toast({
+        title: "Could not create crash report",
+        description: String(e?.message || e),
+        variant: "destructive",
+      });
+    }
+  };
 
   const call999 = () => {
     window.location.href = "tel:999";
@@ -253,7 +330,7 @@ export default function Crash() {
   const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast({ title: "Copied", description: "Details copied to clipboard." });
+      toast({ title: "Copied", description: "Copied to clipboard." });
     } catch {
       toast({
         title: "Copy failed",
@@ -261,30 +338,6 @@ export default function Crash() {
         variant: "destructive",
       });
     }
-  };
-
-  const onPickPhotos = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-
-    const mapped = files.map((file) => ({
-      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      file,
-      name: file.name,
-      size: file.size,
-      url: URL.createObjectURL(file),
-    }));
-
-    setPhotos((prev) => [...mapped, ...prev].slice(0, 30));
-    e.target.value = "";
-  };
-
-  const removePhoto = (id) => {
-    setPhotos((prev) => {
-      const x = prev.find((p) => p.id === id);
-      if (x?.url?.startsWith("blob:")) URL.revokeObjectURL(x.url);
-      return prev.filter((p) => p.id !== id);
-    });
   };
 
   const saveMyDetails = () => {
@@ -300,26 +353,105 @@ export default function Crash() {
     }
   };
 
-  const saveDraftManually = async () => {
-    setSavingDraft(true);
+  const saveToSupabase = async () => {
+    if (!activeReportId) {
+      toast({
+        title: "No crash selected",
+        description: "Create a crash report first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSaving(true);
     try {
-      await new Promise((r) => setTimeout(r, 250));
-      toast({ title: "Saved", description: "Crash checklist draft saved." });
+      const payload = {
+        notes: safeText(notes),
+        my_details: my || {},
+        other_details: other || {},
+        extras: {
+          stepIndex,
+          isSafe,
+          needsHelp,
+        },
+        // keep latest location snapshot (optional)
+        lat: loc.status === "ok" ? loc.lat : null,
+        lng: loc.status === "ok" ? loc.lng : null,
+        location_text: null,
+      };
+
+      await updateCrashReport(activeReportId, payload);
+
+      toast({ title: "Saved", description: "Crash report saved to Supabase." });
+    } catch (e) {
+      toast({
+        title: "Save failed",
+        description: String(e?.message || e),
+        variant: "destructive",
+      });
     } finally {
-      setSavingDraft(false);
+      setSaving(false);
+    }
+  };
+
+  const onPickPhotos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+
+    if (!activeReportId) {
+      toast({
+        title: "Create a report first",
+        description: "Tap “New” to create a crash report, then add photos.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      for (const file of files.slice(0, 10)) {
+        const row = await uploadCrashPhoto(activeReportId, file);
+        const url = await getCrashPhotoSignedUrl(row.path, 60 * 10);
+
+        setPhotos((prev) => [
+          ...prev,
+          {
+            id: row.id,
+            path: row.path,
+            url,
+            file_name: row.file_name,
+            created_at: row.created_at,
+          },
+        ]);
+      }
+
+      toast({ title: "Uploaded", description: "Photo(s) saved to your crash report." });
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: "Upload failed",
+        description: String(e?.message || e),
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
     }
   };
 
   const exportSummary = () => {
+    const r = reports.find((x) => String(x.id) === String(activeReportId));
+
     const meta = {
-      started_at: startedAt,
+      started_at: r?.created_at || nowIso(),
+      occurred_at: r?.occurred_at || null,
+      created_at: r?.created_at || null,
+      location_text: r?.location_text || null,
       location:
         loc.status === "ok"
           ? { lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy, mapsUrl: loc.mapsUrl }
-          : { error: loc.error || "Unavailable" },
+          : null,
       notes: safeText(notes),
-      photo_count: photos.length,
-      photos: photos.map((p) => ({ name: p.name, size: p.size })),
     };
 
     const text = buildShareText(my, other, meta);
@@ -328,7 +460,7 @@ export default function Crash() {
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = `AutoMateAI-Crash-Report-${new Date(startedAt).toISOString().slice(0, 10)}.txt`;
+    a.download = `AutoMateAI-Crash-Report-${new Date().toISOString().slice(0, 10)}.txt`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -338,8 +470,12 @@ export default function Crash() {
   };
 
   const shareText = useMemo(() => {
+    const r = reports.find((x) => String(x.id) === String(activeReportId));
     const meta = {
-      started_at: startedAt,
+      started_at: r?.created_at || nowIso(),
+      occurred_at: r?.occurred_at || null,
+      created_at: r?.created_at || null,
+      location_text: r?.location_text || null,
       location:
         loc.status === "ok"
           ? { lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy, mapsUrl: loc.mapsUrl }
@@ -347,7 +483,7 @@ export default function Crash() {
       notes: safeText(notes),
     };
     return buildShareText(my, other, meta);
-  }, [my, other, notes, startedAt, loc.status, loc.lat, loc.lng, loc.mapsUrl, loc.accuracy]);
+  }, [reports, activeReportId, loc.status, loc.lat, loc.lng, loc.accuracy, loc.mapsUrl, notes, my, other]);
 
   return (
     <Layout>
@@ -360,19 +496,48 @@ export default function Crash() {
       </Helmet>
 
       <div className="space-y-4">
-        {/* Big red entry card */}
+        {/* Top emergency card */}
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
           <div className="flex items-start gap-3">
             <div className="h-11 w-11 rounded-xl bg-red-500/20 flex items-center justify-center shrink-0">
               <AlertTriangle className="h-6 w-6 text-red-400" />
             </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight text-red-100">
-                I had a crash
-              </h1>
-              <p className="text-sm text-red-100/70 mt-1">
-                Keep calm. Follow the steps. (UK focused)
-              </p>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl font-bold leading-tight text-red-100">I had a crash</h1>
+              <p className="text-sm text-red-100/70 mt-1">Keep calm. Follow the steps. (UK focused)</p>
+
+              {/* ✅ Supabase report selector */}
+              <div className="mt-3 flex items-center gap-2">
+                <div className="flex-1">
+                  <Select
+                    value={activeReportId}
+                    onValueChange={(v) => setActiveReportId(v)}
+                    disabled={loadingReports || !reports?.length}
+                  >
+                    <SelectTrigger className="h-10 bg-card/50 border-border">
+                      <SelectValue placeholder={loadingReports ? "Loading reports…" : "Select crash…"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(reports || []).map((r) => (
+                        <SelectItem key={r.id} value={String(r.id)}>
+                          {r.title || "Crash report"} • {niceDateTime(r.occurred_at || r.created_at)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button type="button" variant="destructive" className="h-10 px-3" onClick={startNewCrash}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New
+                </Button>
+              </div>
+
+              {!reports?.length && !loadingReports && (
+                <div className="mt-2 text-xs text-red-100/70">
+                  No crash reports yet. Tap <span className="font-semibold">New</span> to create one.
+                </div>
+              )}
             </div>
           </div>
 
@@ -386,30 +551,18 @@ export default function Crash() {
           <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 text-sm">
               <MapPin className="h-4 w-4 text-muted-foreground" />
-              {loc.status === "loading" && (
-                <span className="text-muted-foreground">Getting location…</span>
-              )}
-              {loc.status === "error" && (
-                <span className="text-muted-foreground">Location unavailable</span>
-              )}
+              {loc.status === "loading" && <span className="text-muted-foreground">Getting location…</span>}
+              {loc.status === "error" && <span className="text-muted-foreground">Location unavailable</span>}
               {loc.status === "ok" && (
                 <span className="text-muted-foreground">
                   {loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}{" "}
-                  <span className="opacity-70">
-                    (±{Math.round(loc.accuracy)}m)
-                  </span>
+                  <span className="opacity-70">(±{Math.round(loc.accuracy)}m)</span>
                 </span>
               )}
             </div>
 
             {loc.status === "ok" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  window.open(loc.mapsUrl, "_blank", "noopener,noreferrer")
-                }
-              >
+              <Button variant="outline" size="sm" onClick={() => window.open(loc.mapsUrl, "_blank", "noopener,noreferrer")}>
                 Open map
               </Button>
             )}
@@ -429,18 +582,13 @@ export default function Crash() {
           </div>
 
           <div className="mt-3 h-2 w-full rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-primary to-secondary"
-              style={{ width: `${progressPct}%` }}
-            />
+            <div className="h-full bg-gradient-to-r from-primary to-secondary" style={{ width: `${progressPct}%` }} />
           </div>
 
           <div className="mt-4">
             {step.id === "safety" && (
               <div className="space-y-3">
-                <div className="text-base font-semibold">
-                  Are you and others safe?
-                </div>
+                <div className="text-base font-semibold">Are you and others safe?</div>
                 <div className="text-sm text-muted-foreground">
                   Stop the vehicle if you haven’t already. Turn on hazard lights. If possible, move to a safe place.
                 </div>
@@ -479,64 +627,23 @@ export default function Crash() {
             {step.id === "emergency" && (
               <div className="space-y-3">
                 <div className="text-base font-semibold">Emergency services</div>
-
                 <div className="text-sm text-muted-foreground">
                   {needsHelp
                     ? "If anyone is injured or there’s danger (fire, blocked road, serious damage), call emergency services now."
                     : "If there are no injuries, stay calm and continue. If unsure, call for help."}
                 </div>
 
-                <Button
-                  type="button"
-                  variant="destructive"
-                  className="h-14 w-full text-base"
-                  onClick={call999}
-                >
+                <Button type="button" variant="destructive" className="h-14 w-full text-base" onClick={call999}>
                   <PhoneCall className="h-5 w-5 mr-2" />
                   Call 999 now
                 </Button>
-
-                <div className="rounded-xl border border-border bg-card/50 p-3 text-sm">
-                  <div className="font-semibold">
-                    Location (share this with emergency services)
-                  </div>
-                  <div className="text-muted-foreground mt-1">
-                    {loc.status === "ok"
-                      ? `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)} (±${Math.round(loc.accuracy)}m)`
-                      : "Unavailable"}
-                  </div>
-                  {loc.status === "ok" && (
-                    <div className="flex gap-2 mt-2 flex-wrap">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyToClipboard(`${loc.lat}, ${loc.lng}`)}
-                      >
-                        <Copy className="h-4 w-4 mr-2" />
-                        Copy coords
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          window.open(loc.mapsUrl, "_blank", "noopener,noreferrer")
-                        }
-                      >
-                        Open map
-                      </Button>
-                    </div>
-                  )}
-                </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <Button variant="outline" className="h-11" onClick={goBack}>
                     <ChevronLeft className="h-4 w-4 mr-2" />
                     Back
                   </Button>
-                  <Button
-                    className="h-11 bg-gradient-to-r from-primary to-secondary"
-                    onClick={goNext}
-                  >
+                  <Button className="h-11 bg-gradient-to-r from-primary to-secondary" onClick={goNext}>
                     Next
                     <ChevronRight className="h-4 w-4 ml-2" />
                   </Button>
@@ -563,37 +670,19 @@ export default function Crash() {
                   <div className="grid grid-cols-1 gap-3">
                     <div>
                       <Label>Name</Label>
-                      <Input
-                        value={my.name}
-                        onChange={(e) =>
-                          setMy((p) => ({ ...p, name: e.target.value }))
-                        }
-                        placeholder="Your name"
-                      />
+                      <Input value={my.name} onChange={(e) => setMy((p) => ({ ...p, name: e.target.value }))} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label>Phone</Label>
-                        <Input
-                          value={my.phone}
-                          onChange={(e) =>
-                            setMy((p) => ({ ...p, phone: e.target.value }))
-                          }
-                          placeholder="07…"
-                        />
+                        <Input value={my.phone} onChange={(e) => setMy((p) => ({ ...p, phone: e.target.value }))} />
                       </div>
                       <div>
                         <Label>Vehicle reg</Label>
                         <Input
                           value={my.vrm}
-                          onChange={(e) =>
-                            setMy((p) => ({
-                              ...p,
-                              vrm: e.target.value.toUpperCase(),
-                            }))
-                          }
-                          placeholder="AB12CDE"
+                          onChange={(e) => setMy((p) => ({ ...p, vrm: e.target.value.toUpperCase() }))}
                           className="uppercase"
                         />
                       </div>
@@ -602,46 +691,22 @@ export default function Crash() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label>Make / model</Label>
-                        <Input
-                          value={my.makeModel}
-                          onChange={(e) =>
-                            setMy((p) => ({ ...p, makeModel: e.target.value }))
-                          }
-                          placeholder="e.g., BMW 3 Series"
-                        />
+                        <Input value={my.makeModel} onChange={(e) => setMy((p) => ({ ...p, makeModel: e.target.value }))} />
                       </div>
                       <div>
                         <Label>Colour</Label>
-                        <Input
-                          value={my.colour}
-                          onChange={(e) =>
-                            setMy((p) => ({ ...p, colour: e.target.value }))
-                          }
-                          placeholder="e.g., Black"
-                        />
+                        <Input value={my.colour} onChange={(e) => setMy((p) => ({ ...p, colour: e.target.value }))} />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label>Insurer</Label>
-                        <Input
-                          value={my.insurer}
-                          onChange={(e) =>
-                            setMy((p) => ({ ...p, insurer: e.target.value }))
-                          }
-                          placeholder="e.g., Admiral"
-                        />
+                        <Input value={my.insurer} onChange={(e) => setMy((p) => ({ ...p, insurer: e.target.value }))} />
                       </div>
                       <div>
                         <Label>Policy no</Label>
-                        <Input
-                          value={my.policy}
-                          onChange={(e) =>
-                            setMy((p) => ({ ...p, policy: e.target.value }))
-                          }
-                          placeholder="Optional"
-                        />
+                        <Input value={my.policy} onChange={(e) => setMy((p) => ({ ...p, policy: e.target.value }))} />
                       </div>
                     </div>
                   </div>
@@ -649,40 +714,23 @@ export default function Crash() {
 
                 <div className="rounded-xl border border-border bg-card/50 p-3 space-y-3">
                   <div className="font-semibold">Other driver</div>
+
                   <div className="grid grid-cols-1 gap-3">
                     <div>
                       <Label>Name</Label>
-                      <Input
-                        value={other.name}
-                        onChange={(e) =>
-                          setOther((p) => ({ ...p, name: e.target.value }))
-                        }
-                        placeholder="Their name"
-                      />
+                      <Input value={other.name} onChange={(e) => setOther((p) => ({ ...p, name: e.target.value }))} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label>Phone</Label>
-                        <Input
-                          value={other.phone}
-                          onChange={(e) =>
-                            setOther((p) => ({ ...p, phone: e.target.value }))
-                          }
-                          placeholder="07…"
-                        />
+                        <Input value={other.phone} onChange={(e) => setOther((p) => ({ ...p, phone: e.target.value }))} />
                       </div>
                       <div>
                         <Label>Vehicle reg</Label>
                         <Input
                           value={other.vrm}
-                          onChange={(e) =>
-                            setOther((p) => ({
-                              ...p,
-                              vrm: e.target.value.toUpperCase(),
-                            }))
-                          }
-                          placeholder="AB12CDE"
+                          onChange={(e) => setOther((p) => ({ ...p, vrm: e.target.value.toUpperCase() }))}
                           className="uppercase"
                         />
                       </div>
@@ -691,60 +739,28 @@ export default function Crash() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label>Make / model</Label>
-                        <Input
-                          value={other.makeModel}
-                          onChange={(e) =>
-                            setOther((p) => ({
-                              ...p,
-                              makeModel: e.target.value,
-                            }))
-                          }
-                          placeholder="e.g., Ford Fiesta"
-                        />
+                        <Input value={other.makeModel} onChange={(e) => setOther((p) => ({ ...p, makeModel: e.target.value }))} />
                       </div>
                       <div>
                         <Label>Colour</Label>
-                        <Input
-                          value={other.colour}
-                          onChange={(e) =>
-                            setOther((p) => ({ ...p, colour: e.target.value }))
-                          }
-                          placeholder="e.g., White"
-                        />
+                        <Input value={other.colour} onChange={(e) => setOther((p) => ({ ...p, colour: e.target.value }))} />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label>Insurer</Label>
-                        <Input
-                          value={other.insurer}
-                          onChange={(e) =>
-                            setOther((p) => ({ ...p, insurer: e.target.value }))
-                          }
-                          placeholder="Optional"
-                        />
+                        <Input value={other.insurer} onChange={(e) => setOther((p) => ({ ...p, insurer: e.target.value }))} />
                       </div>
                       <div>
                         <Label>Policy no</Label>
-                        <Input
-                          value={other.policy}
-                          onChange={(e) =>
-                            setOther((p) => ({ ...p, policy: e.target.value }))
-                          }
-                          placeholder="Optional"
-                        />
+                        <Input value={other.policy} onChange={(e) => setOther((p) => ({ ...p, policy: e.target.value }))} />
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 w-full"
-                  onClick={() => copyToClipboard(shareText)}
-                >
+                <Button type="button" variant="outline" className="h-11 w-full" onClick={() => copyToClipboard(shareText)}>
                   <Copy className="h-4 w-4 mr-2" />
                   Copy shareable details
                 </Button>
@@ -754,10 +770,7 @@ export default function Crash() {
                     <ChevronLeft className="h-4 w-4 mr-2" />
                     Back
                   </Button>
-                  <Button
-                    className="h-11 bg-gradient-to-r from-primary to-secondary"
-                    onClick={goNext}
-                  >
+                  <Button className="h-11 bg-gradient-to-r from-primary to-secondary" onClick={goNext}>
                     Next
                     <ChevronRight className="h-4 w-4 ml-2" />
                   </Button>
@@ -775,7 +788,6 @@ export default function Crash() {
                 <div className="rounded-xl border border-border bg-card/50 p-3">
                   <Label className="block mb-2">Add photos</Label>
 
-                  {/* Hidden inputs: one for "take photo", one for "choose" */}
                   <input
                     ref={takeInputRef}
                     type="file"
@@ -798,8 +810,9 @@ export default function Crash() {
                       type="button"
                       className="h-12 bg-gradient-to-r from-primary to-secondary"
                       onClick={() => takeInputRef.current?.click()}
+                      disabled={uploading || !activeReportId}
                     >
-                      <Camera className="h-4 w-4 mr-2" />
+                      {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Camera className="h-4 w-4 mr-2" />}
                       Take photo
                     </Button>
 
@@ -808,35 +821,37 @@ export default function Crash() {
                       variant="outline"
                       className="h-12"
                       onClick={() => chooseInputRef.current?.click()}
+                      disabled={uploading || !activeReportId}
                     >
-                      <ImageIcon className="h-4 w-4 mr-2" />
+                      {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ImageIcon className="h-4 w-4 mr-2" />}
                       Choose
                     </Button>
                   </div>
 
-                  {photos.length > 0 && (
+                  {!activeReportId && (
+                    <div className="text-xs text-muted-foreground mt-2">
+                      Create a crash report first (tap <span className="font-semibold">New</span>).
+                    </div>
+                  )}
+
+                  {loadingPhotos ? (
+                    <div className="mt-3 text-sm text-muted-foreground flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading photos…
+                    </div>
+                  ) : photos.length > 0 ? (
                     <div className="mt-3 grid grid-cols-3 gap-2">
                       {photos.map((p) => (
-                        <div
-                          key={p.id}
-                          className="relative rounded-lg overflow-hidden border border-border"
-                        >
-                          <img
-                            src={p.url}
-                            alt={p.name}
-                            className="h-24 w-full object-cover"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removePhoto(p.id)}
-                            className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1"
-                            aria-label="Remove photo"
-                          >
-                            <AlertTriangle className="h-3 w-3" />
-                          </button>
+                        <div key={p.id} className="relative rounded-lg overflow-hidden border border-border">
+                          <img src={p.url} alt={p.file_name || "Crash photo"} className="h-24 w-full object-cover" />
+                          <div className="absolute bottom-1 left-1 rounded bg-black/55 text-white text-[10px] px-1.5 py-0.5">
+                            Saved
+                          </div>
                         </div>
                       ))}
                     </div>
+                  ) : (
+                    <div className="mt-3 text-xs text-muted-foreground">No photos yet.</div>
                   )}
 
                   <div className="text-xs text-muted-foreground mt-2">
@@ -861,10 +876,7 @@ export default function Crash() {
                     <ChevronLeft className="h-4 w-4 mr-2" />
                     Back
                   </Button>
-                  <Button
-                    className="h-11 bg-gradient-to-r from-primary to-secondary"
-                    onClick={goNext}
-                  >
+                  <Button className="h-11 bg-gradient-to-r from-primary to-secondary" onClick={goNext}>
                     Next
                     <ChevronRight className="h-4 w-4 ml-2" />
                   </Button>
@@ -876,34 +888,11 @@ export default function Crash() {
               <div className="space-y-4">
                 <div className="text-base font-semibold">Notify insurance & save report</div>
                 <div className="text-sm text-muted-foreground">
-                  You can export a summary now. We’ll add full PDF export + insurer one-tap actions next.
-                </div>
-
-                <div className="rounded-xl border border-border bg-card/50 p-3 space-y-2">
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Started: </span>
-                    <span className="font-medium">{niceDateTime(startedAt)}</span>
-                  </div>
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Location: </span>
-                    <span className="font-medium">
-                      {loc.status === "ok"
-                        ? `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`
-                        : "Unavailable"}
-                    </span>
-                  </div>
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Photos added: </span>
-                    <span className="font-medium">{photos.length}</span>
-                  </div>
+                  Save to Supabase (so it appears in your crash dropdown). Export a summary if needed.
                 </div>
 
                 <div className="grid grid-cols-1 gap-2">
-                  <Button
-                    variant="outline"
-                    className="h-11"
-                    onClick={() => copyToClipboard(shareText)}
-                  >
+                  <Button variant="outline" className="h-11" onClick={() => copyToClipboard(shareText)}>
                     <Copy className="h-4 w-4 mr-2" />
                     Copy report summary
                   </Button>
@@ -915,11 +904,11 @@ export default function Crash() {
 
                   <Button
                     className="h-11 bg-gradient-to-r from-primary to-secondary"
-                    onClick={saveDraftManually}
-                    disabled={savingDraft}
+                    onClick={saveToSupabase}
+                    disabled={saving || !activeReportId}
                   >
-                    <Save className="h-4 w-4 mr-2" />
-                    {savingDraft ? "Saving…" : "Save checklist"}
+                    {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                    Save to Supabase
                   </Button>
 
                   <Button type="button" variant="destructive" className="h-12" onClick={call999}>
