@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Helmet } from "react-helmet";
-import { Upload, File, Trash2, Download, Search } from "lucide-react";
+import { Upload, File, Trash2, Download, Search, Eye, X } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,13 +13,40 @@ import { useDocuments } from "@/hooks/useDocuments";
 import { useVehicles } from "@/hooks/useVehicles";
 import { useToast } from "@/components/ui/use-toast";
 
+function isPdf(doc) {
+  const mime = String(doc?.mime_type || "").toLowerCase();
+  const path = String(doc?.file_path || "").toLowerCase();
+  return mime.includes("pdf") || path.endsWith(".pdf");
+}
+
+function isImage(doc) {
+  const mime = String(doc?.mime_type || "").toLowerCase();
+  const path = String(doc?.file_path || "").toLowerCase();
+  if (mime.startsWith("image/")) return true;
+  return [".png", ".jpg", ".jpeg", ".webp"].some((ext) => path.endsWith(ext));
+}
+
 export default function DocumentVault() {
-  const { documents, loadingDocuments, uploadDocument, deleteDocument, getDownloadUrl, bytesToNice } = useDocuments();
+  const {
+    documents,
+    loadingDocuments,
+    uploadDocument,
+    deleteDocument,
+    getDownloadUrl,
+    bytesToNice,
+  } = useDocuments();
+
   const { vehicles } = useVehicles();
   const { toast } = useToast();
 
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // ✅ Preview state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const [filters, setFilters] = useState({
     q: "",
@@ -50,17 +77,13 @@ export default function DocumentVault() {
   const filtered = useMemo(() => {
     const q = filters.q.trim().toLowerCase();
     return (documents || []).filter((d) => {
-      const okVehicle =
-        filters.vehicleId === "all" ? true : String(d.vehicle_id || "") === String(filters.vehicleId);
+      const vid = d.vehicle_id ? String(d.vehicle_id) : "general";
+      const okVehicle = filters.vehicleId === "all" ? true : vid === String(filters.vehicleId);
       const okType = filters.type === "all" ? true : String(d.type || "other") === String(filters.type);
 
       if (!q) return okVehicle && okType;
 
-      const hay = [
-        d.name,
-        d.type,
-        getVehicleName(d.vehicle_id),
-      ]
+      const hay = [d.name, d.type, getVehicleName(d.vehicle_id)]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -69,6 +92,36 @@ export default function DocumentVault() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documents, filters.vehicleId, filters.type, filters.q, vehicles]);
+
+  const openPreview = async (doc) => {
+    try {
+      setPreviewDoc(doc);
+      setPreviewUrl("");
+      setPreviewOpen(true);
+      setPreviewLoading(true);
+
+      const url = await getDownloadUrl(doc);
+      setPreviewUrl(url);
+    } catch (err) {
+      toast({
+        title: "Preview failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      });
+      setPreviewOpen(false);
+      setPreviewDoc(null);
+      setPreviewUrl("");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewOpen(false);
+    setPreviewDoc(null);
+    setPreviewUrl("");
+    setPreviewLoading(false);
+  };
 
   const handleUpload = async (e) => {
     e.preventDefault();
@@ -108,7 +161,6 @@ export default function DocumentVault() {
 
       setUploadDialogOpen(false);
       setFormData({ vehicleId: "", name: "", type: "insurance" });
-      // Reset file input so the same file can be re-selected if needed
       e.target.reset();
     } catch (err) {
       toast({
@@ -125,6 +177,11 @@ export default function DocumentVault() {
     try {
       await deleteDocument(id);
       toast({ title: "Document deleted", description: "Removed from your vault." });
+
+      // If deleting the one currently previewing, close preview
+      if (String(previewDoc?.id) === String(id)) {
+        closePreview();
+      }
     } catch (err) {
       toast({
         title: "Delete failed",
@@ -137,7 +194,6 @@ export default function DocumentVault() {
   const handleDownload = async (doc) => {
     try {
       const url = await getDownloadUrl(doc);
-      // Open in new tab (signed URL)
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (err) {
       toast({
@@ -166,11 +222,14 @@ export default function DocumentVault() {
               Document Vault
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Upload and keep your PDFs and images tied to each vehicle.
+              Tap any document to preview it instantly.
             </p>
           </div>
 
-          <Button onClick={() => setUploadDialogOpen(true)} className="bg-gradient-to-r from-primary to-secondary h-9 px-3 text-sm">
+          <Button
+            onClick={() => setUploadDialogOpen(true)}
+            className="bg-gradient-to-r from-primary to-secondary h-9 px-3 text-sm"
+          >
             <Upload className="h-4 w-4 mr-2" />
             Upload
           </Button>
@@ -245,7 +304,13 @@ export default function DocumentVault() {
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: Math.min(index * 0.05, 0.25) }}
-                className="bg-card border border-border rounded-xl p-5 hover:border-primary/50 transition-colors"
+                className="bg-card border border-border rounded-xl p-5 hover:border-primary/50 transition-colors cursor-pointer"
+                onClick={() => openPreview(doc)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") openPreview(doc);
+                }}
               >
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -261,7 +326,11 @@ export default function DocumentVault() {
                     </div>
                   </div>
 
-                  <div className="flex gap-1 shrink-0">
+                  {/* Actions — stop propagation so card tap still previews */}
+                  <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="icon" onClick={() => openPreview(doc)} title="Preview">
+                      <Eye className="h-4 w-4" />
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleDownload(doc)} title="Download / open">
                       <Download className="h-4 w-4" />
                     </Button>
@@ -356,6 +425,81 @@ export default function DocumentVault() {
               {uploading ? "Uploading…" : "Upload Document"}
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ✅ Preview dialog */}
+      <Dialog open={previewOpen} onOpenChange={(v) => (v ? null : closePreview())}>
+        <DialogContent className="max-w-[860px] w-[95vw] max-h-[90vh] overflow-hidden p-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
+            <div className="min-w-0">
+              <div className="font-semibold truncate">{previewDoc?.name || "Preview"}</div>
+              <div className="text-xs text-muted-foreground truncate">
+                {previewDoc ? `${documentTypes[previewDoc.type] || "Other"} • ${getVehicleName(previewDoc.vehicle_id)}` : ""}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {previewDoc && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownload(previewDoc)}
+                    className="h-8"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Open
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={closePreview}
+                    className="h-8 w-8"
+                    aria-label="Close preview"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-background">
+            {previewLoading ? (
+              <div className="h-[70vh] flex items-center justify-center text-sm text-muted-foreground">
+                Loading preview…
+              </div>
+            ) : !previewUrl ? (
+              <div className="h-[70vh] flex items-center justify-center text-sm text-muted-foreground">
+                No preview available.
+              </div>
+            ) : isImage(previewDoc) ? (
+              <div className="h-[70vh] overflow-auto">
+                <img
+                  src={previewUrl}
+                  alt={previewDoc?.name || "Document"}
+                  className="w-full h-auto block"
+                />
+              </div>
+            ) : isPdf(previewDoc) ? (
+              <div className="h-[70vh]">
+                <iframe
+                  title={previewDoc?.name || "PDF Preview"}
+                  src={previewUrl}
+                  className="w-full h-full"
+                />
+              </div>
+            ) : (
+              <div className="h-[70vh] flex flex-col items-center justify-center text-sm text-muted-foreground gap-3">
+                <div>This file type can’t be previewed yet.</div>
+                <Button variant="outline" onClick={() => handleDownload(previewDoc)}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Open file
+                </Button>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </Layout>
