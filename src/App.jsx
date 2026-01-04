@@ -18,9 +18,28 @@ import DocumentVault from "@/pages/DocumentVault";
 import Reminders from "@/pages/Reminders";
 import Reports from "@/pages/Reports";
 import Profile from "@/pages/Profile";
+import Crash from "@/pages/Crash"; // ✅ ADD THIS
 
-// ✅ NEW
-import Crash from "@/pages/Crash";
+// ✅ sets --app-height to fix iOS camera/filepicker black-screen bug
+function useAppHeightVar() {
+  useEffect(() => {
+    const set = () => {
+      document.documentElement.style.setProperty(
+        "--app-height",
+        `${window.innerHeight}px`
+      );
+    };
+
+    set();
+    window.addEventListener("resize", set);
+    window.addEventListener("orientationchange", set);
+
+    return () => {
+      window.removeEventListener("resize", set);
+      window.removeEventListener("orientationchange", set);
+    };
+  }, []);
+}
 
 function PrivateRoute({ children }) {
   const { user } = useAuth();
@@ -34,16 +53,15 @@ function PublicRoute({ children }) {
 
 function ScrollToTop() {
   const { pathname } = useLocation();
-
   useEffect(() => {
-    // keep inside scroll container too
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [pathname]);
-
   return null;
 }
 
 export default function App() {
+  useAppHeightVar();
+
   return (
     <Router>
       <AuthProvider>
@@ -67,9 +85,15 @@ export default function App() {
 
         <ScrollToTop />
 
-        {/* App frame: lock page scrolling, scroll happens INSIDE pages (Layout main) */}
-        <div className="h-dvh w-full bg-neutral-900 flex justify-center items-stretch sm:items-center sm:p-6 overflow-hidden">
-          <div className="w-full max-w-[430px] h-dvh sm:h-[min(860px,100dvh-3rem)] bg-background text-foreground shadow-2xl sm:rounded-2xl overflow-hidden">
+        {/* ✅ Use --app-height instead of dvh to avoid iOS black screen */}
+        <div
+          className="w-full bg-neutral-900 flex justify-center items-stretch sm:items-center sm:p-6 overflow-hidden"
+          style={{ height: "var(--app-height)" }}
+        >
+          <div
+            className="w-full max-w-[430px] bg-background text-foreground shadow-2xl sm:rounded-2xl overflow-hidden"
+            style={{ height: "var(--app-height)" }}
+          >
             <Routes>
               <Route
                 path="/login"
@@ -87,7 +111,6 @@ export default function App() {
                   </PublicRoute>
                 }
               />
-
               <Route
                 path="/dashboard"
                 element={
@@ -112,17 +135,6 @@ export default function App() {
                   </PrivateRoute>
                 }
               />
-
-              {/* ✅ NEW: Crash flow */}
-              <Route
-                path="/crash"
-                element={
-                  <PrivateRoute>
-                    <Crash />
-                  </PrivateRoute>
-                }
-              />
-
               <Route
                 path="/reminders"
                 element={
@@ -148,7 +160,18 @@ export default function App() {
                 }
               />
 
+              {/* ✅ ADD THIS ROUTE */}
+              <Route
+                path="/crash"
+                element={
+                  <PrivateRoute>
+                    <Crash />
+                  </PrivateRoute>
+                }
+              />
+
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              {/* optional: fallback */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
 

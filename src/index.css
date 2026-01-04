@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    /* THEME */
     --background: 220 15% 8%;
     --foreground: 210 20% 98%;
     --card: 220 15% 10%;
@@ -25,48 +26,44 @@
     --ring: 0 84% 60%;
     --radius: 0.5rem;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
 
   html,
-  body {
+  body,
+  #root {
     height: 100%;
-  }
-
-  html {
-    /* Prevent iOS "auto text scaling" weirdness */
-    -webkit-text-size-adjust: 100%;
-    text-size-adjust: 100%;
-
-    /* Prevent layout shift when scrollbar appears/disappears */
-    scrollbar-gutter: stable both-edges;
   }
 
   body {
     @apply bg-background text-foreground;
+    background: hsl(var(--background));
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
       "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 
-    /* Make scrolling feel more "app-like" */
+    /* App-like scroll behaviour */
     overscroll-behavior-y: none;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* ✅ BIG ONE: stops iOS Safari zooming into inputs */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scrollbar-gutter: stable both-edges;
+  }
+
+  /* ✅ Prevent iOS Safari zooming into inputs */
   input,
   select,
   textarea {
     font-size: 16px;
   }
 
-  /* Better tap feel on mobile */
   button,
   a,
   [role="button"] {
@@ -74,7 +71,6 @@
     touch-action: manipulation;
   }
 
-  /* Nicer focus (works well with shadcn) */
   :focus-visible {
     outline: none;
     box-shadow: 0 0 0 2px hsl(var(--ring) / 0.25);
