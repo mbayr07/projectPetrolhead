@@ -15,10 +15,8 @@ import Signup from "@/pages/Signup";
 import Dashboard from "@/pages/Dashboard";
 import VehicleDetails from "@/pages/VehicleDetails";
 import DocumentVault from "@/pages/DocumentVault";
-import Reminders from "@/pages/Reminders";
-import Reports from "@/pages/Reports";
 import Profile from "@/pages/Profile";
-import Crash from "@/pages/Crash"; // ✅ ADD THIS
+import Crash from "@/pages/Crash"; // ✅ keep crash
 
 // ✅ sets --app-height to fix iOS camera/filepicker black-screen bug
 function useAppHeightVar() {
@@ -85,7 +83,7 @@ export default function App() {
 
         <ScrollToTop />
 
-        {/* ✅ Use --app-height instead of dvh to avoid iOS black screen */}
+        {/* ✅ Restore original phone-frame feel */}
         <div
           className="w-full bg-neutral-900 flex justify-center items-stretch sm:items-center sm:p-6 overflow-hidden"
           style={{ height: "var(--app-height)" }}
@@ -111,6 +109,7 @@ export default function App() {
                   </PublicRoute>
                 }
               />
+
               <Route
                 path="/dashboard"
                 element={
@@ -136,22 +135,6 @@ export default function App() {
                 }
               />
               <Route
-                path="/reminders"
-                element={
-                  <PrivateRoute>
-                    <Reminders />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/reports"
-                element={
-                  <PrivateRoute>
-                    <Reports />
-                  </PrivateRoute>
-                }
-              />
-              <Route
                 path="/profile"
                 element={
                   <PrivateRoute>
@@ -160,7 +143,7 @@ export default function App() {
                 }
               />
 
-              {/* ✅ ADD THIS ROUTE */}
+              {/* ✅ KEEP CRASH */}
               <Route
                 path="/crash"
                 element={
@@ -170,8 +153,11 @@ export default function App() {
                 }
               />
 
+              {/* ✅ remove value pages for now: keep old URLs safe */}
+              <Route path="/reminders" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/reports" element={<Navigate to="/dashboard" replace />} />
+
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              {/* optional: fallback */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
 

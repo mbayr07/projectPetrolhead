@@ -1,12 +1,9 @@
-// src/components/Layout.jsx
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard,
   FileText,
-  Bell,
-  BarChart3,
   User,
   LogOut,
   Car,
@@ -27,12 +24,11 @@ export default function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // ✅ Dashboard / Docs / Crash / Profile
   const tabs = [
-    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+    { icon: LayoutDashboard, label: "Home", path: "/dashboard" },
     { icon: FileText, label: "Docs", path: "/documents" },
     { icon: AlertTriangle, label: "Crash", path: "/crash", danger: true },
-    { icon: Bell, label: "Reminders", path: "/reminders" },
-    { icon: BarChart3, label: "Reports", path: "/reports" },
     { icon: User, label: "Profile", path: "/profile" },
   ];
 
@@ -105,25 +101,24 @@ export default function Layout({ children }) {
               const Icon = tab.icon;
               const active = isActive(tab.path);
 
-              // ✅ Special “Crash” styling
-              const dangerIdle = "bg-red-500/10 text-red-300 border border-red-500/25 hover:bg-red-500/15";
-              const dangerActive = "bg-red-500/20 text-red-200 border border-red-500/40";
+              // Special styling for Crash tab
+              const danger = !!tab.danger;
 
               return (
                 <Link key={tab.path} to={tab.path} className="flex-1" aria-label={tab.label}>
                   <motion.div
                     whileTap={{ scale: 0.97 }}
                     className={`mx-1 rounded-xl px-2 py-2 flex flex-col items-center justify-center gap-1 transition-colors ${
-                      tab.danger
+                      danger
                         ? active
-                          ? dangerActive
-                          : dangerIdle
+                          ? "border border-red-500/50 bg-red-500/20 text-red-200"
+                          : "border border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/15"
                         : active
                         ? "bg-gradient-to-r from-primary/20 to-secondary/20 text-primary border border-primary/30"
                         : "text-muted-foreground hover:bg-muted"
                     }`}
                   >
-                    <Icon className="h-5 w-5" />
+                    <Icon className={`h-5 w-5 ${danger ? "text-red-300" : ""}`} />
                     <span className="text-[11px] font-medium leading-none">{tab.label}</span>
                   </motion.div>
                 </Link>
