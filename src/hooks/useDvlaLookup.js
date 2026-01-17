@@ -1,15 +1,12 @@
 export async function dvlaLookup(registrationNumber) {
-  const clean = registrationNumber.replace(/\s+/g, "").toUpperCase();
+  const clean = String(registrationNumber || "").replace(/\s+/g, "").toUpperCase();
+  if (!clean) throw new Error("Registration number required");
 
-  const r = await fetch("http://localhost:5174/api/dvla", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ registrationNumber: clean }),
-  });
+  const r = await fetch(`/api/dvla/${clean}`, { method: "GET" });
 
-  const data = await r.json();
+  const data = await r.json().catch(() => ({}));
   if (!r.ok) {
-    throw new Error(data?.error || "DVLA lookup failed");
+    throw new Error(data?.error || "DVLA/DVSA lookup failed");
   }
   return data;
 }

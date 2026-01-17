@@ -11,6 +11,7 @@ const MOCK_DVLA_DATA = {
     colour: "WHITE",
     fuelType: "PETROL",
     motExpiryDate: "2026-06-11",
+    motExpiryEstimated: false,
     taxDueDate: "2026-12-01",
     taxStatus: "Taxed",
   },
@@ -100,7 +101,6 @@ function toDbPartial(updates) {
   const out = { updated_at: new Date().toISOString() };
   const has = (k) => Object.prototype.hasOwnProperty.call(updates, k);
 
-  // allow both camelCase + snake_case photo fields
   const photoUrl = updates.photoUrl ?? updates.photo_url;
   const photoPath = updates.photoPath ?? updates.photo_path;
 
@@ -225,7 +225,6 @@ export function useVehicles() {
     [user?.id]
   );
 
-  // ✅ FIXED: partial update so photo updates won't wipe DVLA fields
   const updateVehicle = useCallback(
     async (id, updates) => {
       if (!user?.id) throw new Error("Not logged in.");
@@ -273,6 +272,7 @@ export function useVehicles() {
     [user?.id, vehicles]
   );
 
+  // ✅ uses your Vercel serverless route (now returns precise MOT day when available)
   const lookupDVLA = useCallback(async (registrationNumber) => {
     const clean = cleanVrm(registrationNumber);
     if (!clean) return null;
@@ -281,7 +281,8 @@ export function useVehicles() {
       const res = await fetch(`/api/dvla/${clean}`);
       if (!res.ok) return null;
       return await res.json();
-    } catch {
+    } catch (e) {
+      console.warn("DVLA lookup failed, using mock if available:", e);
       return MOCK_DVLA_DATA[clean] || null;
     }
   }, []);
