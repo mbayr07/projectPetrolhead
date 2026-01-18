@@ -1,13 +1,12 @@
 // api/dvla/[vrm].js
 //
-// MOT History API only (VES API disabled)
-// To re-enable VES, set USE_VES_API = true and add back the VES fetch logic
+// Uses MOT History API for precise dates, falls back to VES for new vehicles
 //
 export const config = {
   runtime: "nodejs",
 };
 
-const USE_VES_API = false; // Set to true to re-enable VES API
+const VES_URL = "https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles";
 
 function cleanVrm(v) {
   return String(v || "").replace(/\s+/g, "").toUpperCase();
@@ -104,6 +103,44 @@ async function fetchDvsaExactMotExpiry(vrm) {
   return candidates[0].expiry;
 }
 
+// Fetch from VES API (returns vehicle details + estimated MOT due for new vehicles)
+async function fetchVesData(vrm) {
+  const apiKey = process.env.DVLA_API_KEY;
+  if (!apiKey) throw new Error("DVLA_API_KEY missing in env");
+
+  const r = await fetch(VES_URL, {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ registrationNumber: vrm }),
+  });
+
+  const text = await r.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch {}
+
+  if (!r.ok) {
+    throw new Error(`VES failed: ${r.status} ${text?.slice(0, 200)}`);
+  }
+
+  return data;
+}
+
+// Calculate first MOT due date (3 years from first registration)
+function calculateFirstMotDue(registrationDate) {
+  if (!registrationDate) return null;
+
+  const regDate = new Date(registrationDate);
+  if (isNaN(regDate.getTime())) return null;
+
+  // First MOT due 3 years after registration
+  regDate.setFullYear(regDate.getFullYear() + 3);
+
+  return regDate.toISOString().split("T")[0];
+}
+
 export default async function handler(req, res) {
   try {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -122,20 +159,72 @@ export default async function handler(req, res) {
     if (!vrm) return res.status(400).json({ error: "VRM required" });
 
     let motExpiryDate = null;
+    let motExpiryEstimated = false;
+    let motExpirySource = null;
     let motHistoryError = null;
+    let vesData = null;
+    let vesError = null;
 
+    // 1. Try MOT History API first (for precise dates)
     try {
       motExpiryDate = await fetchDvsaExactMotExpiry(vrm);
+      if (motExpiryDate) {
+        motExpirySource = "MOT_HISTORY";
+      }
     } catch (e) {
       motHistoryError = String(e?.message || e);
     }
 
+    // 2. If no MOT history, fall back to VES for vehicle data
+    try {
+      vesData = await fetchVesData(vrm);
+    } catch (e) {
+      vesError = String(e?.message || e);
+    }
+
+    // 3. If no MOT expiry from history, calculate from registration date
+    if (!motExpiryDate && vesData) {
+      // Check if VES has motExpiryDate (it sometimes does for older vehicles)
+      if (vesData.motExpiryDate) {
+        motExpiryDate = vesData.motExpiryDate;
+        motExpirySource = "VES";
+      }
+      // For new vehicles, calculate first MOT due date
+      else if (vesData.monthOfFirstRegistration || vesData.dateOfLastV5CIssued) {
+        const regDate = vesData.monthOfFirstRegistration
+          ? `${vesData.monthOfFirstRegistration}-01` // "2024-01" -> "2024-01-01"
+          : vesData.dateOfLastV5CIssued;
+
+        const calculatedDate = calculateFirstMotDue(regDate);
+        if (calculatedDate) {
+          motExpiryDate = calculatedDate;
+          motExpiryEstimated = true;
+          motExpirySource = "CALCULATED_FROM_REGISTRATION";
+        }
+      }
+    }
+
     return res.status(200).json({
       registrationNumber: vrm,
+
+      // Vehicle details from VES
+      make: vesData?.make || null,
+      model: vesData?.model || null,
+      yearOfManufacture: vesData?.yearOfManufacture || null,
+      colour: vesData?.colour || null,
+      fuelType: vesData?.fuelType || null,
+      taxStatus: vesData?.taxStatus || null,
+      taxDueDate: vesData?.taxDueDate || null,
+      monthOfFirstRegistration: vesData?.monthOfFirstRegistration || null,
+
+      // MOT data
       motExpiryDate: motExpiryDate || null,
-      motExpiryEstimated: false, // never estimate in this DVSA-only test
-      motExpirySource: motExpiryDate ? "DVSA_MOT_HISTORY_ONLY" : "DVSA_NO_EXPIRY",
-      motHistoryError, // null if OK
+      motExpiryEstimated,
+      motExpirySource: motExpirySource || "NO_DATA",
+
+      // Errors (for debugging)
+      motHistoryError,
+      vesError,
     });
   } catch (err) {
     return res.status(500).json({
