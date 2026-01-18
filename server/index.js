@@ -25,19 +25,51 @@ function dvsaDateToIso(d) {
   return s;
 }
 
+// Get OAuth token from Microsoft Entra ID
+async function getDvsaToken() {
+  const tokenUrl = process.env.DVSA_TOKEN_URL;
+  const clientId = process.env.DVSA_CLIENT_ID;
+  const clientSecret = process.env.DVSA_CLIENT_SECRET;
+  const scope = process.env.DVSA_SCOPE_URL;
+
+  if (!tokenUrl || !clientId || !clientSecret || !scope) {
+    throw new Error("Missing DVSA OAuth env vars");
+  }
+
+  const body = new URLSearchParams();
+  body.set("client_id", clientId);
+  body.set("client_secret", clientSecret);
+  body.set("grant_type", "client_credentials");
+  body.set("scope", scope);
+
+  const r = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+
+  const text = await r.text();
+  let j = {};
+  try { j = JSON.parse(text); } catch {}
+
+  if (!r.ok) throw new Error(`Token request failed: ${r.status}`);
+  if (!j?.access_token) throw new Error("No access_token in response");
+  return j.access_token;
+}
+
 async function fetchMotExpiry(vrm) {
   const apiKey = process.env.DVSA_API_KEY;
-
   if (!apiKey) throw new Error("DVSA_API_KEY missing in .env");
 
-  // Use the beta API (just API key, no OAuth)
-  const url = `https://beta.check-mot.service.gov.uk/trade/vehicles/mot-tests?registration=${encodeURIComponent(vrm)}`;
+  const token = await getDvsaToken();
+  const url = `https://history.mot.api.gov.uk/v1/trade/vehicles/registration/${encodeURIComponent(vrm)}`;
 
   const r = await fetch(url, {
     method: "GET",
     headers: {
+      Authorization: `Bearer ${token}`,
       "x-api-key": apiKey,
-      Accept: "application/json+v6",
+      Accept: "application/json",
     },
   });
 
@@ -47,8 +79,7 @@ async function fetchMotExpiry(vrm) {
 
   if (!r.ok) throw new Error(`DVSA MOT failed: ${r.status} ${text?.slice(0, 200)}`);
 
-  const vehicle = Array.isArray(data) ? data[0] : data;
-  const motTests = vehicle?.motTests || [];
+  const motTests = data?.motTests || [];
 
   if (!Array.isArray(motTests) || motTests.length === 0) return null;
 
