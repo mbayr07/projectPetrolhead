@@ -1,7 +1,13 @@
 // api/dvla/[vrm].js
+//
+// MOT History API only (VES API disabled)
+// To re-enable VES, set USE_VES_API = true and add back the VES fetch logic
+//
 export const config = {
   runtime: "nodejs",
 };
+
+const USE_VES_API = false; // Set to true to re-enable VES API
 
 function cleanVrm(v) {
   return String(v || "").replace(/\s+/g, "").toUpperCase();

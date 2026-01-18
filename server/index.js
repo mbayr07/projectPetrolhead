@@ -1,4 +1,8 @@
 // server/index.js
+//
+// VES API is currently DISABLED - only MOT History API is active (via Vercel function)
+// To re-enable VES, set USE_VES_API = true below
+//
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -9,17 +13,27 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const USE_VES_API = false; // Set to true to re-enable VES API
 const DVLA_URL = "https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles";
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 app.get("/api/dvla/:vrm", async (req, res) => {
   try {
-    const apiKey = process.env.DVLA_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: "DVLA_API_KEY missing in server .env" });
-
     const vrm = String(req.params.vrm || "").replace(/\s+/g, "").toUpperCase();
     if (!vrm) return res.status(400).json({ error: "VRM required" });
+
+    // VES API disabled - return empty response with just the registration
+    if (!USE_VES_API) {
+      return res.json({
+        registrationNumber: vrm,
+        vesDisabled: true,
+        message: "VES API is currently disabled. Only MOT History API is active.",
+      });
+    }
+
+    const apiKey = process.env.DVLA_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "DVLA_API_KEY missing in server .env" });
 
     const dvlaRes = await fetch(DVLA_URL, {
       method: "POST",
