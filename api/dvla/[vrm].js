@@ -6,40 +6,25 @@ export const config = {
 const DVLA_URL =
   "https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles";
 
-// ---------------------------
-// MOT History (DVSA) helpers
-// ---------------------------
-
-// cache the access token in memory (works well on Vercel warm lambdas)
-let _cachedToken = null;
-let _cachedTokenExpMs = 0;
-
+// --- helpers ---
 function cleanVrm(v) {
   return String(v || "").replace(/\s+/g, "").toUpperCase();
 }
 
-function normalizeDateToIso(dateStr) {
-  if (!dateStr) return null;
-  // DVSA older format: "2014.11.02"
-  if (/^\d{4}\.\d{2}\.\d{2}$/.test(dateStr)) return dateStr.replace(/\./g, "-");
-  // already ISO "YYYY-MM-DD"
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-  // sometimes "YYYY.MM.DD HH:mm:ss" exists for completedDate, ignore
-  return null;
+// DVSA often returns dates like "2014.11.02" -> convert to "2014-11-02"
+function dvsaDateToIso(d) {
+  const s = String(d || "").trim();
+  if (!s) return "";
+  if (/^\d{4}\.\d{2}\.\d{2}$/.test(s)) return s.replaceAll(".", "-");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return s; // leave as-is if unknown format
 }
 
-function maxIsoDate(dates) {
-  const iso = dates.map(normalizeDateToIso).filter(Boolean);
-  if (!iso.length) return null;
-  iso.sort(); // lexical works for YYYY-MM-DD
-  return iso[iso.length - 1];
-}
-
-// Fallback estimator if we still cannot get a real day
-function estimateMotExpiryDateFromDVLA(dvla) {
+// Fallback estimate if no exact date is available
+function estimateMotExpiryDateFromDvla(dvla) {
   if (dvla?.motExpiryDate) return { date: dvla.motExpiryDate, estimated: false };
 
-  const mor = dvla?.monthOfFirstRegistration; // "YYYY-MM"
+  const mor = dvla?.monthOfFirstRegistration; // e.g. "2017-06"
   if (!mor || !/^\d{4}-\d{2}$/.test(mor)) return { date: null, estimated: false };
 
   const [y, m] = mor.split("-").map(Number);
@@ -54,22 +39,21 @@ function estimateMotExpiryDateFromDVLA(dvla) {
   return { date: `${yyyy}-${mm}-${dd}`, estimated: true };
 }
 
-async function getDvsaAccessToken() {
-  const now = Date.now();
-  if (_cachedToken && now < _cachedTokenExpMs - 30_000) return _cachedToken;
-
+// Fetch an OAuth token for DVSA (client_credentials)
+async function getDvsaToken() {
   const tokenUrl = process.env.DVSA_TOKEN_URL;
   const clientId = process.env.DVSA_CLIENT_ID;
   const clientSecret = process.env.DVSA_CLIENT_SECRET;
   const scope = process.env.DVSA_SCOPE_URL;
 
-  // If any missing, just skip OAuth (we’ll still try API key flow if possible)
-  if (!tokenUrl || !clientId || !clientSecret || !scope) return null;
+  if (!tokenUrl || !clientId || !clientSecret || !scope) {
+    throw new Error("DVSA OAuth env missing (DVSA_TOKEN_URL / DVSA_CLIENT_ID / DVSA_CLIENT_SECRET / DVSA_SCOPE_URL)");
+  }
 
   const body = new URLSearchParams();
-  body.set("grant_type", "client_credentials");
   body.set("client_id", clientId);
   body.set("client_secret", clientSecret);
+  body.set("grant_type", "client_credentials");
   body.set("scope", scope);
 
   const r = await fetch(tokenUrl, {
@@ -78,97 +62,74 @@ async function getDvsaAccessToken() {
     body,
   });
 
-  const data = await r.json().catch(() => ({}));
+  const t = await r.text();
+  let j = null;
+  try { j = JSON.parse(t); } catch {}
+
   if (!r.ok) {
-    // don’t hard-fail the whole endpoint if token fails
-    console.error("DVSA token error:", r.status, data);
-    return null;
+    throw new Error(`DVSA token failed: ${r.status} ${t}`);
   }
 
-  const token = data.access_token;
-  const expiresIn = Number(data.expires_in || 0); // seconds
-  if (!token) return null;
-
-  _cachedToken = token;
-  _cachedTokenExpMs = Date.now() + expiresIn * 1000;
+  const token = j?.access_token;
+  if (!token) throw new Error("DVSA token missing access_token");
   return token;
 }
 
-/**
- * Fetch MOT history to get precise expiry date.
- *
- * We try:
- *  1) DVSA_BASE_URL (default https://tapi.dvsa.gov.uk) with x-api-key + optional Bearer token
- *  2) fallback to https://beta.check-mot.service.gov.uk (old host) using x-api-key only
- */
-async function fetchMotExpiryPrecise(vrm) {
+// Call DVSA MOT History and return an exact expiry date if possible
+async function fetchDvsaMotExpiry(vrm) {
+  const baseUrl = process.env.DVSA_BASE_URL || "https://tapi.dvsa.gov.uk";
   const apiKey = process.env.DVSA_API_KEY;
-  if (!apiKey) return null;
 
-  const basePrimary = (process.env.DVSA_BASE_URL || "https://tapi.dvsa.gov.uk").replace(/\/+$/, "");
-  const baseFallback = "https://beta.check-mot.service.gov.uk";
+  if (!apiKey) throw new Error("DVSA_API_KEY missing in env");
 
-  const token = await getDvsaAccessToken();
+  const token = await getDvsaToken();
 
-  const tryOne = async (baseUrl) => {
-    const url = `${baseUrl}/trade/vehicles/mot-tests?registration=${encodeURIComponent(vrm)}`;
+  const url = `${baseUrl.replace(/\/+$/, "")}/trade/vehicles/mot-tests?registration=${encodeURIComponent(vrm)}`;
 
-    const headers = {
-      Accept: "application/json+v6",
+  const r = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
       "x-api-key": apiKey,
-    };
 
-    // If token exists, include it (newer setups may require it)
-    if (token) headers.Authorization = `Bearer ${token}`;
+      // Some versions expect this style; harmless if not required
+      Accept: "application/json",
+    },
+  });
 
-    const r = await fetch(url, { method: "GET", headers });
-    if (r.status === 404) return null;
+  const text = await r.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch { data = null; }
 
-    const data = await r.json().catch(() => null);
-    if (!r.ok) {
-      // 401/403 etc — let caller decide fallback
-      const err = new Error(`MOT history request failed: ${r.status}`);
-      err.status = r.status;
-      err.data = data;
-      throw err;
-    }
-
-    // Expected shape (old API): array of vehicles
-    const vehicle = Array.isArray(data) ? data[0] : null;
-    if (!vehicle) return null;
-
-    // Most reliable: max expiryDate from motTests[]
-    const expiry = maxIsoDate((vehicle.motTests || []).map((t) => t.expiryDate));
-
-    // Some vehicles may provide due date when no MOT exists
-    const due = normalizeDateToIso(vehicle.motTestDueDate);
-
-    return expiry || due || null;
-  };
-
-  // 1) primary
-  try {
-    const d = await tryOne(basePrimary);
-    if (d) return d;
-  } catch (e) {
-    // if auth/host mismatch, fall through to fallback
-    console.warn("Primary MOT endpoint failed:", e?.status || "", e?.message || e);
+  if (!r.ok) {
+    // bubble up useful debug (but keep it short)
+    throw new Error(`DVSA MOT failed: ${r.status} ${text?.slice(0, 200)}`);
   }
 
-  // 2) fallback host (older docs)
-  try {
-    const d = await tryOne(baseFallback);
-    if (d) return d;
-  } catch (e) {
-    console.warn("Fallback MOT endpoint failed:", e?.status || "", e?.message || e);
-  }
+  // DVSA typically returns an array of vehicles
+  const vehicle = Array.isArray(data) ? data[0] : data;
+  const motTests = vehicle?.motTests || vehicle?.motTestHistory || [];
 
-  return null;
+  if (!Array.isArray(motTests) || motTests.length === 0) return null;
+
+  // Pick the best candidate expiry:
+  // - expiryDate exists on PASSED tests in the old API docs
+  // - New API still follows a similar structure
+  const candidates = motTests
+    .map((t) => ({
+      expiry: dvsaDateToIso(t?.expiryDate),
+      completed: String(t?.completedDate || "").trim(),
+      result: String(t?.testResult || "").toUpperCase(),
+    }))
+    .filter((x) => x.expiry);
+
+  if (!candidates.length) return null;
+
+  // Sort by completedDate (rough) then take the latest expiry we have
+  candidates.sort((a, b) => (a.completed > b.completed ? -1 : a.completed < b.completed ? 1 : 0));
+  return candidates[0].expiry;
 }
 
-// ---------------------------
-// Handler
-// ---------------------------
 export default async function handler(req, res) {
   try {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -179,8 +140,8 @@ export default async function handler(req, res) {
     if (req.method === "OPTIONS") return res.status(204).end();
     if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
-    const dvlaApiKey = process.env.DVLA_API_KEY;
-    if (!dvlaApiKey) return res.status(500).json({ error: "DVLA_API_KEY missing in Vercel env" });
+    const dvlaKey = process.env.DVLA_API_KEY;
+    if (!dvlaKey) return res.status(500).json({ error: "DVLA_API_KEY missing in Vercel env" });
 
     const vrmRaw =
       (req.query && (req.query.vrm || req.query.registrationNumber)) ||
@@ -189,11 +150,11 @@ export default async function handler(req, res) {
     const vrm = cleanVrm(vrmRaw);
     if (!vrm) return res.status(400).json({ error: "VRM required" });
 
-    // 1) DVLA lookup
+    // 1) DVLA Vehicle Enquiry (make/model/tax/etc)
     const dvlaRes = await fetch(DVLA_URL, {
       method: "POST",
       headers: {
-        "x-api-key": dvlaApiKey,
+        "x-api-key": dvlaKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ registrationNumber: vrm }),
@@ -201,11 +162,7 @@ export default async function handler(req, res) {
 
     const dvlaText = await dvlaRes.text();
     let dvlaData;
-    try {
-      dvlaData = JSON.parse(dvlaText);
-    } catch {
-      dvlaData = { raw: dvlaText };
-    }
+    try { dvlaData = JSON.parse(dvlaText); } catch { dvlaData = { raw: dvlaText }; }
 
     if (!dvlaRes.ok) {
       return res.status(dvlaRes.status).json({
@@ -215,26 +172,47 @@ export default async function handler(req, res) {
       });
     }
 
-    // 2) MOT precise date via MOT history API (if available)
-    const preciseMot = await fetchMotExpiryPrecise(vrm);
+    // 2) DVSA MOT History (exact expiry)
+    let dvsaExact = null;
+    let dvsaError = null;
 
-    // 3) Fallback estimator if still missing
-    const fallbackMot = estimateMotExpiryDateFromDVLA(dvlaData);
+    try {
+      dvsaExact = await fetchDvsaMotExpiry(vrm);
+    } catch (e) {
+      dvsaError = String(e?.message || e);
+    }
 
-    const finalMotDate = preciseMot || dvlaData?.motExpiryDate || fallbackMot.date || null;
-    const isEstimated = !preciseMot && !dvlaData?.motExpiryDate && !!fallbackMot.estimated;
+    // 3) Final MOT expiry logic
+    const fallback = estimateMotExpiryDateFromDvla(dvlaData);
+
+    const finalMotExpiry =
+      dvsaExact ||
+      dvlaData?.motExpiryDate ||
+      fallback.date ||
+      null;
+
+    const estimated =
+      !!fallback.estimated && !dvsaExact && !dvlaData?.motExpiryDate;
 
     return res.status(200).json({
       ...dvlaData,
 
+      // convenience alias
       model: dvlaData.model ?? dvlaData.vehicleModel ?? null,
 
-      // ✅ guaranteed keys for frontend
-      motExpiryDate: finalMotDate,
-      motExpiryEstimated: isEstimated,
+      // ✅ frontend uses this
+      motExpiryDate: finalMotExpiry,
+      motExpiryEstimated: estimated,
 
-      // optional debug (handy while testing, remove later)
-      motSource: preciseMot ? "mot-history" : dvlaData?.motExpiryDate ? "dvla" : fallbackMot.date ? "estimated" : "none",
+      // ✅ useful debug while testing (safe to keep)
+      motExpirySource: dvsaExact
+        ? "DVSA_MOT_HISTORY"
+        : dvlaData?.motExpiryDate
+        ? "DVLA"
+        : fallback.date
+        ? "ESTIMATE_3Y_EOM"
+        : "UNKNOWN",
+      motHistoryError: dvsaError, // null if ok
     });
   } catch (err) {
     return res.status(500).json({
