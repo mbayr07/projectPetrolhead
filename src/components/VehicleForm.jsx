@@ -1,3 +1,18 @@
+// src/components/VehicleForm.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { Search, Loader2, Image as ImageIcon, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/use-toast";
+import { useVehicles } from "@/hooks/useVehicles";
+
+// ✅ KEEP THIS AS DEFAULT EXPORT
+export default function VehicleForm({ onSuccess, initialData = null }) {
+  // --- your existing VehicleForm code stays EXACTLY the same ---
+}
+
+
 const handleDVLALookup = async () => {
   if (!formData.registrationNumber) {
     toast({
