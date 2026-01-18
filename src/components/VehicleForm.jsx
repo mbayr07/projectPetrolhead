@@ -163,7 +163,21 @@ export default function VehicleForm({ onSuccess, initialData = null }) {
         isSorn: isSornFromDVLA ? true : prev.isSorn,
       }));
 
-      toast({ title: "Vehicle Found!", description: "DVLA data loaded successfully." });
+      // Show appropriate toast based on what data we got
+      if (dvla.motExpiryDate) {
+        toast({ title: "Vehicle Found!", description: "MOT expiry date loaded." });
+      } else if (dvla.motHistoryError) {
+        toast({
+          title: "MOT Lookup Issue",
+          description: dvla.motHistoryError,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "No MOT Data",
+          description: "No MOT expiry found for this vehicle. It may be new or exempt.",
+        });
+      }
     } catch {
       toast({
         title: "Lookup failed",
