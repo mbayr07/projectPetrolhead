@@ -61,13 +61,13 @@ async function getDvsaToken() {
 }
 
 async function fetchDvsaExactMotExpiry(vrm) {
-  const baseUrl = (process.env.DVSA_BASE_URL || "https://tapi.dvsa.gov.uk").replace(/\/+$/, "");
+  const baseUrl = (process.env.DVSA_BASE_URL || "https://history.mot.api.gov.uk").replace(/\/+$/, "");
   const apiKey = process.env.DVSA_API_KEY;
 
   if (!apiKey) throw new Error("DVSA_API_KEY missing in env");
 
   const token = await getDvsaToken();
-  const url = `${baseUrl}/trade/vehicles/mot-tests?registration=${encodeURIComponent(vrm)}`;
+  const url = `${baseUrl}/v1/trade/vehicles/registration/${encodeURIComponent(vrm)}`;
 
   const r = await fetch(url, {
     method: "GET",
