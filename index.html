@@ -45,6 +45,7 @@
       .btn-ghost{background:#fff;border-color:var(--border);color:var(--navy)}
       .btn-ghost:hover{border-color:var(--teal)}
       .section{padding:88px 0;scroll-margin-top:90px}
+      #features.section{padding:120px 0 100px}
       .section.alt{background:#F1F5F9}
       .hero{padding:96px 0 72px;background:linear-gradient(180deg,rgba(0,31,63,0.06),transparent)}
       .hero-grid{display:grid;gap:36px;align-items:center}
@@ -122,10 +123,28 @@
       .section-title h2{font-family:"Playfair Display",serif;font-size:clamp(1.9rem,3.1vw,2.7rem);color:var(--navy);margin-bottom:10px}
       .section-title p{color:var(--muted)}
       .grid{display:grid;gap:24px}
-      .features-grid{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+      .features-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .features-grid .card{
+        background:#fff;
+        border:1px solid var(--border);
+        border-radius:16px;
+        padding:24px;
+        box-shadow:0 4px 15px rgba(0,0,0,0.06);
+        transition:transform .25s ease,box-shadow .25s ease;
+      }
+      .features-grid .card:hover{transform:translateY(-8px);box-shadow:0 20px 40px rgba(0,0,0,0.1)}
       .card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:24px;box-shadow:var(--shadow-soft);transition:transform .2s ease,box-shadow .2s ease}
       .card:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
-      .icon-circle{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:rgba(0,122,122,.12);color:var(--teal);font-size:1.05rem}
+      .icon-circle{
+        width:56px;
+        height:56px;
+        border-radius:50%;
+        display:grid;
+        place-items:center;
+        background:#E6F4F4;
+        color:var(--teal);
+        font-size:1.1rem;
+      }
       .split{display:grid;gap:32px;align-items:center}
       .timeline{position:relative;padding-left:24px;display:grid;gap:20px}
       .timeline:before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:linear-gradient(var(--teal),rgba(0,122,122,.15))}
@@ -181,6 +200,8 @@
       .form-status.error{color:#fecaca}
       footer{padding:40px 0;border-top:1px solid var(--border);background:#fff;color:var(--muted);font-size:.9rem}
       @media (min-width:900px){.hero-grid{grid-template-columns:1.1fr .9fr}.split{grid-template-columns:1.1fr .9fr}}
+      @media (max-width:900px){.features-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+      @media (max-width:640px){.features-grid{grid-template-columns:1fr}}
       @media (max-width:768px){nav ul{display:none}.nav{flex-wrap:wrap}}
     </style>
   </head>
@@ -259,8 +280,8 @@
       <section class="section" id="features">
         <div class="container">
           <div class="section-title">
-            <h2>Clear Vehicle Status for UK Drivers</h2>
-            <p>Everything you need to stay compliant, without the clutter.</p>
+            <h2>Everything you need.</h2>
+            <p>Nothing you don’t. Clear status, smart reminders, and zero clutter — built exclusively for UK drivers.</p>
           </div>
           <div class="grid features-grid">
             <article class="card">
@@ -277,6 +298,16 @@
               <div class="icon-circle"><i class="fa-solid fa-bell"></i></div>
               <h3>Reliable reminders</h3>
               <p>Escalating alerts at 30/14/7/1 days with weekly and monthly summaries.</p>
+            </article>
+            <article class="card">
+              <div class="icon-circle"><i class="fa-solid fa-screwdriver-wrench"></i></div>
+              <h3>Maintenance tracking</h3>
+              <p>Log tyres, brakes, cambelt, and service dates with calm, clear timelines.</p>
+            </article>
+            <article class="card">
+              <div class="icon-circle"><i class="fa-solid fa-folder-open"></i></div>
+              <h3>Document storage</h3>
+              <p>Keep MOT certificates, service records, and receipts at hand—stored locally on your device.</p>
             </article>
             <article class="card">
               <div class="icon-circle"><i class="fa-solid fa-lock"></i></div>
@@ -306,6 +337,10 @@
               <div class="timeline-item">
                 <h3>Get reminders</h3>
                 <p>Receive clear alerts and summaries so nothing slips.</p>
+              </div>
+              <div class="timeline-item">
+                <h3>Track maintenance</h3>
+                <p>Keep service items organised with simple logs and due windows.</p>
               </div>
             </div>
           </div>
@@ -408,6 +443,10 @@
               <p>No. Quick checks work without login. An account unlocks garage management and reminders.</p>
             </details>
             <details>
+              <summary>How much data do I need to share to check a vehicle?</summary>
+              <p>Just the registration number. Basic checks do not require an account or any personal details.</p>
+            </details>
+            <details>
               <summary>Where is my data stored?</summary>
               <p>Minimal data is collected (email and vehicle data). Documents are stored locally on device for privacy.</p>
             </details>
@@ -479,7 +518,12 @@
 
     <footer>
       <div class="container">
-        <p>AutoMate AI is not affiliated with DVLA. Data is sourced from public DVLA APIs.</p>
+        <p>Powered by official DVLA data sources and built for UK compliance.</p>
+        <p>
+          <a href="privacy.html">Privacy Policy</a>
+          &nbsp;·&nbsp;
+          <a href="terms.html">Terms</a>
+        </p>
         <p>Copyright 2026 AutoMate AI. All rights reserved.</p>
       </div>
     </footer>
