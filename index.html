@@ -134,13 +134,14 @@
       .testimonials{display:flex;gap:20px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px}
       .testimonial{min-width:280px;scroll-snap-align:start}
       .pricing-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-      .pricing-grid .card{padding:28px 26px}
-      .pricing-grid .card h3{margin-bottom:6px}
-      .pricing-grid .price{margin-bottom:6px}
+      .pricing-grid .card{padding:28px 26px;display:flex;flex-direction:column;gap:8px}
+      .pricing-grid .card h3{margin-bottom:2px}
+      .pricing-grid .price{margin-bottom:4px}
       .pricing-grid p{line-height:1.5}
-      .pricing-grid ul{list-style:none;padding:0;margin:14px 0 18px;display:grid;gap:10px}
+      .pricing-grid ul{list-style:none;padding:0;margin:12px 0 18px;display:grid;gap:10px}
       .pricing-grid li{display:flex;align-items:flex-start;gap:10px;line-height:1.45}
       .pricing-grid li i{color:var(--teal);margin-top:2px}
+      .pricing-grid .btn{margin-top:auto;align-self:flex-start}
       .pricing-card.highlight{border:1px solid var(--teal);box-shadow:0 20px 50px rgba(0,122,122,.2);transform:translateY(-4px)}
       .faq details{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 18px}
       summary{cursor:pointer;font-weight:600;list-style:none}
@@ -175,6 +176,9 @@
         font-family:inherit;
       }
       .form input:focus,.form select:focus{outline:2px solid rgba(0,122,122,.25);border-color:var(--teal)}
+      .form-status{font-size:.9rem;color:#e2e8f0}
+      .form-status.success{color:#bbf7d0}
+      .form-status.error{color:#fecaca}
       footer{padding:40px 0;border-top:1px solid var(--border);background:#fff;color:var(--muted);font-size:.9rem}
       @media (min-width:900px){.hero-grid{grid-template-columns:1.1fr .9fr}.split{grid-template-columns:1.1fr .9fr}}
       @media (max-width:768px){nav ul{display:none}.nav{flex-wrap:wrap}}
@@ -340,18 +344,28 @@
         <div class="container">
           <div class="section-title">
             <h2>Pricing</h2>
-            <p>Free checks forever. Upgrade for full coverage.</p>
+            <p>Start free. Upgrade for full coverage and advanced reminders.</p>
           </div>
           <div class="grid pricing-grid">
             <article class="card">
               <h3>Free</h3>
               <p class="price">£0</p>
               <ul>
-                <li><i class="fa-solid fa-check"></i>Unlimited DVLA lookups</li>
-                <li><i class="fa-solid fa-check"></i>Guest mode + demo vehicles</li>
-                <li><i class="fa-solid fa-check"></i>Up to 2 vehicles</li>
+                <li><i class="fa-solid fa-check"></i>Limited DVLA lookups</li>
+                <li><i class="fa-solid fa-check"></i>Up to 2 vehicles in your garage</li>
+                <li><i class="fa-solid fa-check"></i>Basic reminders</li>
               </ul>
               <a class="btn btn-ghost" href="#waitlist">Start free</a>
+            </article>
+            <article class="card">
+              <h3>Monthly</h3>
+              <p class="price">£3.99/mo</p>
+              <ul>
+                <li><i class="fa-solid fa-check"></i>Unlimited vehicles</li>
+                <li><i class="fa-solid fa-check"></i>Custom reminders</li>
+                <li><i class="fa-solid fa-check"></i>Maintenance tracking</li>
+              </ul>
+              <a class="btn btn-ghost" href="#waitlist">Choose monthly</a>
             </article>
             <article class="card pricing-card highlight">
               <h3>Yearly</h3>
@@ -442,7 +456,7 @@
             <h2 style="font-family:'Playfair Display',serif;margin-bottom:12px;">Join the AutoMate AI waitlist</h2>
             <p>Limited spots available for early access.</p>
           </div>
-          <form class="card form" action="" method="post" aria-label="Waitlist form">
+          <form class="card form" id="waitlist-form" action="" method="post" aria-label="Waitlist form">
             <div class="field">
               <label for="email">Email address</label>
               <input id="email" name="email" type="email" required placeholder="you@example.com" />
@@ -457,6 +471,7 @@
               </select>
             </div>
             <button class="btn btn-teal" type="submit">Request access</button>
+            <p class="form-status" id="waitlist-status" role="status" aria-live="polite"></p>
           </form>
         </div>
       </section>
@@ -468,5 +483,54 @@
         <p>Copyright 2026 AutoMate AI. All rights reserved.</p>
       </div>
     </footer>
+    <script>
+      (function () {
+        const form = document.getElementById("waitlist-form");
+        const statusEl = document.getElementById("waitlist-status");
+        if (!form || !statusEl) return;
+
+        const SUPABASE_URL = "https://hqswvkhqddgfnajrjdyh.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_aTnoWot_OIhmB0nVqXo_aQ_F6EUeG-A";
+        const TABLE = "waitlist";
+
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          statusEl.className = "form-status";
+          statusEl.textContent = "Submitting...";
+
+          const payload = {
+            email: form.email.value.trim(),
+            fleet: form.fleet.value,
+            source: "landing",
+            created_at: new Date().toISOString(),
+          };
+
+          try {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                Prefer: "return=minimal",
+              },
+              body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) {
+              const msg = await res.text();
+              throw new Error(msg || "Request failed");
+            }
+
+            statusEl.classList.add("success");
+            statusEl.textContent = "You're on the list. We'll be in touch.";
+            form.reset();
+          } catch (err) {
+            statusEl.classList.add("error");
+            statusEl.textContent = "Could not submit. Please try again.";
+          }
+        });
+      })();
+    </script>
   </body>
 </html>
