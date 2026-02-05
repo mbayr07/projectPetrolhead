@@ -18,6 +18,7 @@ export default function Signup() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
+    promo: "",
     password: "",
     confirmPassword: "",
   });
@@ -32,7 +33,7 @@ export default function Signup() {
 
     try {
       setLoading(true);
-      await signup(formData.email, formData.password, formData.name);
+      await signup(formData.email, formData.password, formData.name, formData.promo);
 
       toast({
         title: "Account created!",
@@ -112,6 +113,13 @@ export default function Signup() {
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} placeholder="your@email.com" className="pl-10" required />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="promo">Promo code (optional)</Label>
+                <div className="relative">
+                  <Input id="promo" name="promo" type="text" value={formData.promo} onChange={handleChange} placeholder="PROMO2026" />
                 </div>
               </div>
 

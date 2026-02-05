@@ -46,12 +46,12 @@ export default function AuthProvider({ children }) {
   }, []);
 
   // ✅ Email/password signup (FIXED redirect)
-  const signup = async (email, password, name) => {
+  const signup = async (email, password, name, promo) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { name },
+        data: { name, promo: promo || null },
         emailRedirectTo: getRedirectUrl(),
       },
     });
