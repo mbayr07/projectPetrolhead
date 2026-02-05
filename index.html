@@ -501,6 +501,10 @@
               <input id="email" name="email" type="email" required placeholder="you@example.com" />
             </div>
             <div class="field">
+              <label for="promo">Promo code (optional)</label>
+              <input id="promo" name="promo" type="text" placeholder="PROMO2026" />
+            </div>
+            <div class="field">
               <label for="fleet">How many vehicles?</label>
               <select id="fleet" name="fleet">
                 <option>1 vehicle</option>
@@ -544,6 +548,7 @@
 
           const payload = {
             email: form.email.value.trim(),
+            promo: form.promo.value.trim() || null,
             fleet: form.fleet.value,
             source: "landing",
             created_at: new Date().toISOString(),
