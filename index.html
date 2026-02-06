@@ -2,7 +2,7 @@
 <html lang="en-GB">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
     <title>AutoMate AI | UK MOT, Tax & Insurance Reminders</title>
     <meta name="description" content="AutoMate AI is a premium UK vehicle compliance guardian. Instant DVLA checks, a multi-vehicle garage, and refined reminders for MOT, tax, and insurance." />
     <meta name="keywords" content="UK MOT reminder, vehicle tax check, DVLA check, insurance reminder app, MOT checker" />
@@ -42,7 +42,8 @@
       }
 
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      html { scroll-behavior: smooth; }
+      html { scroll-behavior: smooth; overflow-x: hidden; }
+      body { overflow-x: hidden; -webkit-text-size-adjust: 100%; touch-action: pan-y; }
 
       body {
         font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
