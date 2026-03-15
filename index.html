@@ -1416,8 +1416,8 @@
         const statusEl = document.getElementById("waitlist-status");
         if (!form || !statusEl) return;
 
-        const SUPABASE_URL = "https://hqswvkhqddgfnajrjdyh.supabase.co";
-        const SUPABASE_ANON_KEY = "sb_publishable_aTnoWot_OIhmB0nVqXo_aQ_F6EUeG-A";
+        const SUPABASE_URL = "https://nqjruzkvmdfagcjhvwjp.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_z5yKKvccb5PF-rbpPWOVfg_gsUuFLoD";
         const TABLE = "waitlist";
 
         form.addEventListener("submit", async (e) => {
@@ -1445,8 +1445,15 @@
             });
 
             if (!res.ok) {
-              const msg = await res.text();
-              throw new Error(msg || "Request failed");
+              const data = await res.json().catch(() => ({}));
+              // Postgres unique violation = already signed up
+              if (res.status === 409 || data?.code === "23505") {
+                statusEl.classList.add("success");
+                statusEl.textContent = "You're already on the list! We'll be in touch soon.";
+                form.reset();
+                return;
+              }
+              throw new Error(data?.message || "Request failed");
             }
 
             statusEl.classList.add("success");
@@ -1455,6 +1462,7 @@
           } catch (err) {
             statusEl.classList.add("error");
             statusEl.textContent = "Could not submit. Please try again.";
+            console.error("Waitlist error:", err);
           }
         });
 
